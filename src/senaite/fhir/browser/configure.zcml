@@ -1,0 +1,13 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser">
+
+  <!-- @@FHIR dispatcher view -->
+  <browser:page
+      name="FHIR"
+      for="*"
+      class=".fhir.FHIR"
+      permission="zope2.View"
+      allowed_interface=".interfaces.IFHIR" />
+
+</configure>

@@ -1,0 +1,8 @@
+include LICENSE
+exclude MANIFEST.in
+include *.rst
+include *.md
+recursive-include docs *
+recursive-include src/senaite/fhir *
+recursive-exclude src/senaite/fhir *.pyc
+recursive-exclude src/senaite/fhir/tests *
