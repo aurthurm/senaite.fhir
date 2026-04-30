@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from bika.lims import api
+from senaite.fhir import api as fapi
 from senaite.fhir.r5 import add_route
 from senaite.jsonapi import api
-from senaite.jsonapi.exceptions import APIError
 
 ENDPOINT_GET = "senaite.fhir.r5.get"
 
@@ -15,20 +16,27 @@ ENDPOINT_GET = "senaite.fhir.r5.get"
            ENDPOINT_GET, methods=["GET"])
 @add_route("/<string(length=32):uid>",
            ENDPOINT_GET, methods=["GET"])
+@add_route("/<string:resource_type>/<string(length=36):uid>",
+           ENDPOINT_GET, methods=["GET"])
+@add_route("/<string(length=36):uid>",
+           ENDPOINT_GET, methods=["GET"])
 def get(context, request, resource_type=None, uid=None):
     """GET
     """
-    # We have a UID, return the record
-    if uid and not resource_type:
-        return api.get_record(uid)
+    uuids = list(filter(lambda val: fapi.is_uuid(val), [uid, resource_type]))
+    if uuids:
+        uuid = fapi.get_uuid(uuids[0])
+        obj = api.get_object_by_uid(uuid.hex, default=None)
+        if not obj:
+            # XXX search brains by FHIR UID instead
+            fapi.fail(msg="Not Found", status=404)
+        fhir_resource = fapi.to_fhir_resource(obj)
+        return fhir_resource.to_dict()
 
-    # we have a UID as the resource type, return the FHIR resource
-    if api.is_uid(resource_type):
-        return api.get_record(resource_type)
-
+    # all resources from the defined type
     portal_type = api.resource_to_portal_type(resource_type)
     if portal_type is None:
-        raise APIError(404, "Not Found")
+        fapi.fail(msg="Not Found", status=404)
 
     return api.get_batched(portal_type=portal_type, uid=uid,
                            endpoint=ENDPOINT_GET)

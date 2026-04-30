@@ -2,6 +2,8 @@
 
   <!-- Package Includes -->
   <include package=".browser"/>
+  <include package=".converter"/>
   <include package=".r5"/>
+  <include package=".resource"/>
 
 </configure>
