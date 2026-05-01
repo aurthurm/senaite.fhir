@@ -9,7 +9,7 @@ from senaite.fhir.exceptions import FHIRAPIError
 from senaite.fhir.interfaces import IFHIRContent
 from senaite.fhir.interfaces import IFHIRConverter
 from senaite.fhir.interfaces import IFHIRResource
-from senaite.fhir.resource import FHIRResource
+from senaite.fhir.resource import Resource
 from zope.annotation.interfaces import IAnnotations
 from zope.component import queryAdapter
 from zope.interface import alsoProvides
@@ -89,19 +89,39 @@ def get_fhir_uid(obj):
     return None
 
 
-def to_fhir_resource(obj):
+def to_fhir_resource(thing):
     """Converts the object to a FHIR resource
     """
-    if not obj:
+    if not thing:
         return None
 
-    obj = api.get_object(obj)
-    adapter = queryAdapter(obj, IFHIRConverter)
-    if adapter:
-        return adapter.to_fhir_resource()
+    if is_fhir_resource(thing):
+        return thing
 
-    # fallback to default/generic FHIR resource
-    return FHIRResource(obj)
+    if isinstance(thing, dict):
+        rtype = thing.get("resourceType")
+        if not rtype:
+            fail(msg="Not well formed resource. Resource type is missing")
+
+        # Look for FHIRResource named adapters (wrappers)
+        request = api.get_request() or api.get_test_request()
+        resource = queryAdapter(request, IFHIRResource, rtype)
+        if not resource:
+            fail(msg="Resource type is not supported: %s" % rtype)
+
+        return resource
+
+    if api.is_uid(thing):
+        thing = api.get_object_by_uid(thing, default=None)
+        if not thing:
+            fail(msg="Not Found", status=404)
+
+    obj = api.get_object(thing)
+    adapter = queryAdapter(obj, IFHIRConverter)
+    if not adapter:
+        fail(msg="Type is not supported: %r" % obj)
+
+    return adapter.to_fhir_resource()
 
 
 def link_fhir_resource(obj, resource):

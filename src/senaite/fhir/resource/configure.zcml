@@ -1,7 +1,15 @@
 <configure xmlns="http://namespaces.zope.org/zope">
 
+  <!-- Bundle -->
+  <adapter name="Bundle"
+           for="zope.publisher.interfaces.browser.IBrowserRequest"
+           provides="senaite.fhir.interfaces.IFHIRResource"
+           factory=".bundle.Bundle"/>
+
   <!-- Patient -->
-  <adapter for="senaite.patient.interfaces.IPatient"
+  <adapter name="Patient"
+           for="zope.publisher.interfaces.browser.IBrowserRequest"
+           provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".patient.PatientResource"/>
 
 </configure>
