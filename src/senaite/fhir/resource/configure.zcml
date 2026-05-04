@@ -2,13 +2,13 @@
 
   <!-- Bundle -->
   <adapter name="Bundle"
-           for="zope.publisher.interfaces.browser.IBrowserRequest"
+           for="dict"
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".bundle.Bundle"/>
 
   <!-- Patient -->
   <adapter name="Patient"
-           for="zope.publisher.interfaces.browser.IBrowserRequest"
+           for="dict"
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".patient.PatientResource"/>
 

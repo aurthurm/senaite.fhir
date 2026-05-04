@@ -104,8 +104,7 @@ def to_fhir_resource(thing):
             fail(msg="Not well formed resource. Resource type is missing")
 
         # Look for FHIRResource named adapters (wrappers)
-        request = api.get_request() or api.get_test_request()
-        resource = queryAdapter(request, IFHIRResource, rtype)
+        resource = queryAdapter(thing, IFHIRResource, rtype)
         if not resource:
             fail(msg="Resource type is not supported: %s" % rtype)
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from senaite.fhir.api import to_fhir_resource
 from senaite.fhir.resource import Resource
 from senaite.fhir.resource.operationoutcome import OperationOutcome
 
@@ -17,3 +18,15 @@ class Bundle(Resource):
         """
         records = self.get("issues") or []
         return [OperationOutcome(record) for record in records]
+
+    @property
+    def entry(self):
+        entries = self.get("entry") or []
+        resources = []
+        for entry in entries:
+            # TODO fullUrl (e.g. urn:uuid:ddaf107d-a44d-4b7b-966b-65d82de495cc)
+            full_url = entry.get("fullUrl")
+            raw_resource = entry.get("resource")
+            resource = to_fhir_resource(raw_resource)
+            resources.append(resource)
+        return resources

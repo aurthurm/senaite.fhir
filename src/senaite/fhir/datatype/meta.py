@@ -56,3 +56,7 @@ class Meta(dict):
         https://hl7.org/fhir/R5/resource-definitions.html#Meta.source
         """
         return self.get("source")
+
+    @property
+    def profile(self):
+        return self.get("profile") or []
