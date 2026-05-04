@@ -6,6 +6,12 @@
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".bundle.Bundle"/>
 
+  <!-- Organization -->
+  <adapter name="Organization"
+           for="dict"
+           provides="senaite.fhir.interfaces.IFHIRResource"
+           factory=".organization.OrganizationResource"/>
+
   <!-- Patient -->
   <adapter name="Patient"
            for="dict"
