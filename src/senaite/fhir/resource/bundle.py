@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from senaite.fhir.api import to_fhir_resource
-from senaite.fhir.resource import Resource
+from senaite.fhir.resource import FHIRResource
 from senaite.fhir.resource.operationoutcome import OperationOutcome
 
 
-class Bundle(Resource):
+class Bundle(FHIRResource):
 
     @property
     def type(self):

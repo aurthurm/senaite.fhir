@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from senaite.fhir.datatype.code import Code
-from senaite.fhir.resource import Resource
+from senaite.fhir.resource import FHIRResource
 
 _marker = object()
 
-class OperationOutcome(Resource):
+class OperationOutcome(FHIRResource):
 
     @property
     def severity(self):

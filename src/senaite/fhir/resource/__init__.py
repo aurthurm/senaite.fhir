@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from senaite.core.api import dtime
+from senaite.fhir.datatype.identifier import Identifier
 from senaite.fhir.datatype.meta import Meta
 from senaite.fhir.interfaces import IFHIRResource
 from zope.interface import implementer
@@ -9,7 +10,7 @@ _marker = object()
 
 
 @implementer(IFHIRResource)
-class Resource(dict):
+class FHIRResource(dict):
 
     @property
     def resourceType(self):
@@ -50,6 +51,15 @@ class Resource(dict):
         """
         return dtime.to_dt(self.meta.lastUpdated)
 
+    @property
+    def identifier(self):
+        """Returns the Identifier that identifies the organization across
+        multiple systems
+        """
+        data = self.get("identifier")
+        if not data:
+            return None
+        return Identifier(data)
 
     def _get(self, data_type, name, as_list=False, default=None):
         value = self.get(name, _marker)
@@ -58,14 +68,3 @@ class Resource(dict):
         if as_list:
             return [data_type(record) for record in value]
         return data_type(value)
-
-    ## OLD ONES
-
-    def get_identifiers(self):
-        """Returns a dict of {identifier_type:identifier_value}
-        """
-        identifiers = {}
-        items = self.get_raw("identifier") or []
-        for item in items:
-            identifiers[item.get("system")] = item.get("value")
-        return identifiers

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from bika.lims import api
-from senaite.fhir.resource import Resource
+from senaite.fhir.resource import FHIRResource
 from senaite.patient.config import GENDERS
 
 _marker = object()
 
 
-class PatientResource(Resource):
+class PatientResource(FHIRResource):
 
     def get_mrn(self):
         identifier = self.get_identifier("usual")

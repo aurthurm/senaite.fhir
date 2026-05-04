@@ -9,7 +9,6 @@ from senaite.fhir.exceptions import FHIRAPIError
 from senaite.fhir.interfaces import IFHIRContent
 from senaite.fhir.interfaces import IFHIRConverter
 from senaite.fhir.interfaces import IFHIRResource
-from senaite.fhir.resource import Resource
 from zope.annotation.interfaces import IAnnotations
 from zope.component import queryAdapter
 from zope.interface import alsoProvides
