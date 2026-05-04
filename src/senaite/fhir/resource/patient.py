@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from bika.lims import api
+from senaite.core.api import dtime
+from senaite.fhir.datatype.humanname import HumanName
+from senaite.fhir.datatype.identifier import Identifier
 from senaite.fhir.resource import FHIRResource
 from senaite.patient.config import GENDERS
 
@@ -8,6 +11,27 @@ _marker = object()
 
 
 class PatientResource(FHIRResource):
+
+    @property
+    def name(self):
+        items = self.get("name") or []
+        return [HumanName(item) for item in items]
+
+    @property
+    def identifier(self):
+        """Returns the Identifier that identifies the organization across
+        multiple systems
+        """
+        data = self.get("identifier") or []
+        return [Identifier(item) for item in data]
+
+    @property
+    def gender(self):
+        return self.get("gender")
+
+    @property
+    def birthDate(self):
+        return dtime.to_dt(self.get("birthDate"))
 
     def get_mrn(self):
         identifier = self.get_identifier("usual")

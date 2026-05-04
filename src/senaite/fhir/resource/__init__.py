@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from senaite.core.api import dtime
-from senaite.fhir.datatype.identifier import Identifier
 from senaite.fhir.datatype.meta import Meta
 from senaite.fhir.interfaces import IFHIRResource
 from zope.interface import implementer
@@ -50,14 +49,6 @@ class FHIRResource(dict):
         Mimics te behaviour of DX and AT types
         """
         return dtime.to_dt(self.meta.lastUpdated)
-
-    @property
-    def identifier(self):
-        """Returns the Identifier that identifies the organization across
-        multiple systems
-        """
-        data = self.get("identifier") or []
-        return [Identifier(item) for item in data]
 
     def _get(self, data_type, name, as_list=False, default=None):
         value = self.get(name, _marker)
