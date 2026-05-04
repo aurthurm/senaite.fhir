@@ -56,10 +56,8 @@ class FHIRResource(dict):
         """Returns the Identifier that identifies the organization across
         multiple systems
         """
-        data = self.get("identifier")
-        if not data:
-            return None
-        return Identifier(data)
+        data = self.get("identifier") or []
+        return [Identifier(item) for item in data]
 
     def _get(self, data_type, name, as_list=False, default=None):
         value = self.get(name, _marker)

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import re
 from uuid import UUID
 
 from bika.lims import api
@@ -12,8 +13,6 @@ from senaite.fhir.interfaces import IFHIRResource
 from zope.annotation.interfaces import IAnnotations
 from zope.component import queryAdapter
 from zope.interface import alsoProvides
-import re
-from re import sub
 
 _marker = object()
 
@@ -88,7 +87,7 @@ def get_fhir_uid(obj):
     return None
 
 
-def to_fhir_resource(thing):
+def to_fhir_resource(thing, default=_marker):
     """Converts the object to a FHIR resource
     """
     if not thing:
@@ -100,24 +99,32 @@ def to_fhir_resource(thing):
     if isinstance(thing, dict):
         rtype = thing.get("resourceType")
         if not rtype:
-            fail(msg="Not well formed resource. Resource type is missing")
+            if default is _marker:
+                fail(msg="Not well formed resource. Resource type is missing")
+            return default
 
         # Look for FHIRResource named adapters (wrappers)
         resource = queryAdapter(thing, IFHIRResource, rtype)
         if not resource:
-            fail(msg="Resource type is not supported: %s" % rtype)
+            if default is _marker:
+                fail(msg="Resource type is not supported: %s" % rtype)
+            return default
 
         return resource
 
     if api.is_uid(thing):
         thing = api.get_object_by_uid(thing, default=None)
         if not thing:
-            fail(msg="Not Found", status=404)
+            if default is _marker:
+                fail(msg="Not Found", status=404)
+            return default
 
     obj = api.get_object(thing)
     adapter = queryAdapter(obj, IFHIRConverter)
     if not adapter:
-        fail(msg="Type is not supported: %r" % obj)
+        if default is _marker:
+            fail(msg="Type is not supported: %r" % obj)
+        return default
 
     return adapter.to_fhir_resource()
 

@@ -27,6 +27,10 @@ class Bundle(FHIRResource):
             # TODO fullUrl (e.g. urn:uuid:ddaf107d-a44d-4b7b-966b-65d82de495cc)
             full_url = entry.get("fullUrl")
             raw_resource = entry.get("resource")
-            resource = to_fhir_resource(raw_resource)
-            resources.append(resource)
+
+            # TODO Only interested on resuorces that resolve to our own FHIRResource
+            resource = to_fhir_resource(raw_resource, default=None)
+            if resource:
+                resources.append(resource)
+
         return resources

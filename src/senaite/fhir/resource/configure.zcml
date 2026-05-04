@@ -18,4 +18,10 @@
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".patient.PatientResource"/>
 
+  <!-- Practitioner -->
+  <adapter name="Practitioner"
+           for="dict"
+           provides="senaite.fhir.interfaces.IFHIRResource"
+           factory=".practitioner.PractitionerResource"/>
+
 </configure>
