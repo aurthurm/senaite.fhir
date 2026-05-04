@@ -80,3 +80,16 @@ class HumanName(dict):
         info["Firstname"] = parts[0]
         info["Surname"] = " ".join(parts[1:])
         return info
+
+    def get_fullname(self):
+        info = self.get_name_info()
+        keys = ["Salutation",
+                "Firstname",
+                "Middleinitial",
+                "Middlename",
+                "Surname"]
+        vals = [info.get(key) for key in keys]
+        return " ".join(list(filter(None, vals)))
+
+    def __str__(self):
+        return self.get_fullname()
