@@ -7,9 +7,10 @@ from bika.lims import api
 from persistent.dict import PersistentDict
 from senaite.fhir.config import FHIR_STORAGE_KEY
 from senaite.fhir.exceptions import FHIRAPIError
+from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.interfaces import IFHIRContent
-from senaite.fhir.interfaces import IFHIRConverter
 from senaite.fhir.interfaces import IFHIRResource
+from senaite.fhir.interfaces import IFHIRToContent
 from zope.annotation.interfaces import IAnnotations
 from zope.component import queryAdapter
 from zope.interface import alsoProvides
@@ -61,7 +62,7 @@ def get_uuid(thing):
     if isinstance(thing, UUID):
         return thing
     if is_fhir_resource(thing):
-        return UUID(thing.UID)
+        return UUID(thing.id)
     if api.is_object(thing):
         return UUID(api.get_uid(thing))
     return UUID(thing)
@@ -71,7 +72,7 @@ def get_uid(obj):
     """Returns the UUID in hex format
     """
     if is_fhir_resource(obj):
-        return obj.UID
+        return get_uuid(obj).hex
     return api.get_uid(obj)
 
 
@@ -79,12 +80,20 @@ def get_fhir_uid(obj):
     """Returns the UID of the counterpart FHIR content, if any
     """
     if is_fhir_resource(obj):
-        return obj.UID
+        return get_uid(obj)
     obj = api.get_object(obj)
     if is_fhir_content(obj):
         storage = get_fhir_storage(obj)
         return storage.get("uid", None)
     return None
+
+
+def get_object(thing, default=_marker):
+    if is_fhir_resource(thing):
+        thing = get_uid(thing)
+    if default is _marker:
+        return api.get_object(thing)
+    return api.get_object(thing, default=default)
 
 
 def to_fhir_resource(thing, default=_marker):
@@ -120,13 +129,49 @@ def to_fhir_resource(thing, default=_marker):
             return default
 
     obj = api.get_object(thing)
-    adapter = queryAdapter(obj, IFHIRConverter)
+    adapter = queryAdapter(obj, IContentToFHIR)
     if not adapter:
         if default is _marker:
             fail(msg="Type is not supported: %r" % obj)
         return default
 
     return adapter.to_fhir_resource()
+
+
+def create(resource):
+    """Creates a counterpart object for the given FHIR Resource
+    """
+    if not is_fhir_resource(resource):
+        raise ValueError("Type not supported: {}".format(repr(type(resource))))
+
+    # check if already exists
+    uid = get_uid(resource)
+    obj = api.get_object_by_uid(uid, default=None)
+    if obj:
+        raise ValueError("Object with UID '%s' exists: %r" % (uid, obj))
+
+    # create the underlying entries/dependencies first
+    objects = []
+    entries = getattr(resource, "entry", [])
+    for entry in entries:
+        obj = get_object(entry, default=None)
+        if not obj:
+            # TODO rely on a setting to whether create or not
+            # create if it does not exist
+            obj = create(entry)
+        objects.append(obj)
+
+    # convert the resource to a content dict
+    adapter = queryAdapter(resource, IFHIRToContent)
+    data = adapter.to_content_dict()
+    if not data:
+        return None
+
+    # create the object
+    portal_type = data.pop("portal_type")
+    container = data.pop("parent_path")
+    container = api.get_object(container)
+    return api.create(container, portal_type, **data)
 
 
 def link_fhir_resource(obj, resource):
@@ -142,7 +187,7 @@ def link_fhir_resource(obj, resource):
     # assign the FHIR UID, along with current data so we can always use the
     # original information, even when connection with source is lost
     annotation = get_fhir_storage(obj)
-    annotation["uid"] = resource.UID
+    annotation["uid"] = get_uid(resource)
     annotation["data"] = resource.to_dict()
 
 

@@ -1,7 +1,11 @@
 <configure xmlns="http://namespaces.zope.org/zope">
 
-  <!-- Patient -->
+  <!-- Patient To FHIR -->
   <adapter for="senaite.patient.interfaces.IPatient"
-           factory=".patient.PatientToFHIRConverter"/>
+           factory=".patient.PatientToResource"/>
+
+  <!-- FHIR To Patient -->
+  <adapter for="senaite.fhir.interfaces.IPatientResource"
+           factory=".patient.ResourceToPatient"/>
 
 </configure>

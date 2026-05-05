@@ -4,12 +4,15 @@ from bika.lims import api
 from senaite.core.api import dtime
 from senaite.fhir.datatype.humanname import HumanName
 from senaite.fhir.datatype.identifier import Identifier
+from senaite.fhir.interfaces import IPatientResource
 from senaite.fhir.resource import FHIRResource
 from senaite.patient.config import GENDERS
+from zope.interface import implementer
 
 _marker = object()
 
 
+@implementer(IPatientResource)
 class PatientResource(FHIRResource):
 
     @property

@@ -54,8 +54,8 @@ def post(context, request, resource_type=None):
         # convert to a FHIR resource
         resource = fapi.to_fhir_resource(record)
 
-        # TODO Create the counterpart objects
-        entries = resource.entry
+        # use the proper adapter for the creation of counterpart contents
+        obj = fapi.create(resource)
 
     # TODO Create and Return a Bundle Response
     # https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html

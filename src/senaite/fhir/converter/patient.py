@@ -3,8 +3,11 @@
 from bika.lims import api
 from senaite.core.api import dtime
 from senaite.fhir import api as fapi
-from senaite.fhir.config import FHIR_PROFILE_URL
-from senaite.fhir.interfaces import IFHIRConverter
+from senaite.fhir.converter import to_fhir_identifier as to_fhir_id
+from senaite.fhir.converter import to_fhir_profile_url
+from senaite.fhir.interfaces import IContentToFHIR
+from senaite.fhir.interfaces import IFHIRToContent
+from senaite.fhir.interfaces import IPatientResource
 from senaite.fhir.resource.patient import PatientResource
 from senaite.patient.interfaces import IPatient
 from zope.component import adapter
@@ -12,48 +15,35 @@ from zope.interface import implementer
 
 
 @adapter(IPatient)
-@implementer(IFHIRConverter)
-class PatientToFHIRConverter(object):
+@implementer(IContentToFHIR)
+class PatientToResource(object):
 
-    def __init__(self, context):
-        self.context = context
-
-    def to_fhir_id(self, system_id, value, use=None):
-        if not value:
-            return None
-        data = {
-            "system": "%s/Identifier/%s" % (FHIR_PROFILE_URL, system_id),
-            "value": value,
-        }
-        if use:
-            data["use"] = use
-        return data
+    def __init__(self, patient):
+        self.patient = patient
 
     def get_fhir_identifiers(self):
         # basic identifiers
-        patient = self.context
         identifiers = [
-            self.to_fhir_id("context", patient.getId(), use="usual"),
-            self.to_fhir_id("mrn", patient.getMRN(), use="official")
+            to_fhir_id("context", self.patient.getId(), use="usual"),
+            to_fhir_id("mrn", self.patient.getMRN(), use="official")
         ]
         # secondary identifiers
-        for key, value in patient.get_identifier_items():
+        for key, value in self.patient.get_identifier_items():
             sys_id = fapi.slugify(key)
-            fhir_id = self.to_fhir_id(sys_id, value, use="secondary")
+            fhir_id = to_fhir_id(sys_id, value, use="secondary")
             identifiers.append(fhir_id)
         # remove empties
         return list(filter(None, identifiers))
 
     def to_fhir_resource(self):
-        patient = self.context
-        modified = api.get_modification_date(patient)
+        modified = api.get_modification_date(self.patient)
         modified = dtime.to_localized_time(modified, long_format=True)
-        uuid = fapi.get_uuid(patient)
-        profile_url = "{}/StructureDefinition/Patient".format(FHIR_PROFILE_URL)
+        uuid = fapi.get_uuid(self.patient)
+        profile_url = to_fhir_profile_url("Patient")
         data = {
             "resourceType": "Patient",
             "id": str(uuid),
-            "status": api.get_review_status(patient),
+            "status": api.get_review_status(self.patient),
             "meta": {
                 "profile": [ profile_url ],
                 "lastUpdated": modified,
@@ -61,14 +51,25 @@ class PatientToFHIRConverter(object):
             "identifier": self.get_fhir_identifiers(),
         }
 
-        given_name = [patient.getFirstname(), patient.getMiddlename()]
+        given = [self.patient.getFirstname(), self.patient.getMiddlename()]
         data["name"] = {
-            "family": patient.getLastname(),
-            "given": list(filter(None, given_name)),
+            "family": self.patient.getLastname(),
+            "given": list(filter(None, given)),
             "use": "official",
         }
-        dob = patient.getBirthdate()
+        dob = self.patient.getBirthdate()
         data["birthDate"] = dtime.date_to_string(dob)
-        data["gender"] = patient.getGenderText()
+        data["gender"] = self.patient.getGenderText()
 
         return PatientResource(data)
+
+
+@adapter(IPatientResource)
+@implementer(IFHIRToContent)
+class ResourceToPatient(object):
+
+    def __init__(self, resource):
+        self.resource = resource
+
+    def to_content_dict(self):
+        return {}
