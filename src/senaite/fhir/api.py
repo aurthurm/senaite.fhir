@@ -178,7 +178,12 @@ def create(resource):
     portal_type = data.pop("portal_type")
     container = data.pop("parent_path")
     container = api.get_object_by_path(container)
-    return api.create(container, portal_type, **data)
+    obj = api.create(container, portal_type, **data)
+
+    # link the FHIR resource to the obj
+    link_fhir_resource(obj, resource)
+
+    return obj
 
 
 def link_fhir_resource(obj, resource):

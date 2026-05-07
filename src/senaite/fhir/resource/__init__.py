@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import copy
+
 from isort.settings import default
 from senaite.core.api import dtime
 from senaite.fhir.converter import get_by_key
@@ -63,6 +65,9 @@ class FHIRResource(dict):
         """Returns an Extension of this resource by url, if any
         """
         return get_by_key(self.extension, key="url", value=url)
+
+    def to_dict(self):
+        return copy.deepcopy(dict(self))
 
     def _get(self, data_type, name, as_list=False, default=None):
         value = self.get(name, _marker)
