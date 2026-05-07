@@ -2,13 +2,20 @@
 
 from bika.lims import api
 from senaite.core.api import dtime
+from senaite.core.api import geo
+from senaite.core.schema.addressfield import OTHER_ADDRESS
+from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
+from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir import api as fapi
+from senaite.fhir.converter import group_by
 from senaite.fhir.converter import to_fhir_identifier as to_fhir_id
 from senaite.fhir.converter import to_fhir_profile_url
 from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.interfaces import IFHIRToContent
 from senaite.fhir.interfaces import IPatientResource
 from senaite.fhir.resource.patient import PatientResource
+from senaite.patient.config import GENDERS
+from senaite.patient.config import SEXES
 from senaite.patient.interfaces import IPatient
 from zope.component import adapter
 from zope.interface import implementer
@@ -72,4 +79,269 @@ class ResourceToPatient(object):
         self.resource = resource
 
     def to_content_dict(self):
-        return {}
+        # Medical Record Number
+        mrn = self.get_mrn()
+        if not mrn:
+            # TODO check whether mrn is required in current instance
+            raise ValueError("%r: No MRN" % self.resource)
+
+        # Patient name
+        firstname = self.get_firstname()
+        middlename = self.get_middlename()
+        lastname = self.get_lastname()
+        if not any([firstname, lastname]):
+            raise ValueError("%r: No valid name" % self.resource)
+
+        # Sex and gender
+        sex = self.get_sex()
+        gender = self.get_gender()
+
+        # Date of birth
+        birthdate = self.get_birthdate()
+        estimated = self.get_estimated_birthdate()
+
+        # Address
+        address  = self.get_address()
+
+        # Marital status
+        marital = self.get_marital_status()
+
+        # Email(s)
+        primary_email = self.get_primary_email()
+        additional_emails = self.get_additional_emails()
+
+        # Phone(s)
+        primary_phone = self.get_primary_phone()
+        additional_phones = self.get_additional_phones()
+
+        # Container path
+        portal = api.get_portal()
+        parent_path = "%s/patients" % api.get_path(portal)
+
+        return {
+            "portal_type": "Patient",
+            "parent_path": parent_path,
+            "mrn": api.safe_unicode(mrn),
+            "sex": api.safe_unicode(sex),
+            "gender": api.safe_unicode(gender),
+            "birthdate": birthdate,
+            "estimated_birthdate": estimated,
+            "address": list(filter(None, [address])),
+            "firstname": api.safe_unicode(firstname),
+            "middlename": api.safe_unicode(middlename),
+            "lastname": api.safe_unicode(lastname),
+            "marital": api.safe_unicode(marital),
+            "email": api.safe_unicode(primary_email),
+            "additional_emails": additional_emails,
+            "phone": api.safe_unicode(primary_phone),
+            "additional_phones": additional_phones,
+        }
+
+    def get_mrn(self):
+        """Returns the MRN from the resource
+        """
+        identifier = self.resource.get_identifier(use="secondary")
+        return identifier.value if identifier else None
+
+    def get_sex(self):
+        """Returns the Sex from the resource, suitable for Patient content type
+        """
+        # supported genders: male | female | other | unknown
+        # https://fhir.senaite.org/StructureDefinition-SenaitePatient-definitions.html#Patient.gender
+        gender = self.resource.gender
+        if not gender:
+            return ""
+        sexes = dict(SEXES).keys()
+        key = gender[0].lower()
+        if key in sexes:
+            return key
+        return ""
+
+    def get_gender(self):
+        # supported genders: male | female | other | unknown
+        # https://fhir.senaite.org/StructureDefinition-SenaitePatient-definitions.html#Patient.gender
+        gender = self.resource.gender
+        if not gender:
+            return ""
+        # other --> diverse
+        gender = "d" if gender == "other" else gender
+        genders = dict(GENDERS).keys()
+        key = gender[0].lower()
+        if key in genders:
+            return key
+        return ""
+
+    def get_human_name(self):
+        """Returns a dict that represents the name of the Patient
+        """
+        human_name = self.resource.get_name(use="official")
+        if human_name:
+            return human_name
+
+        # no official name, pick the first one
+        human_name = self.resource.name
+        return human_name[0] if human_name else None
+
+    def get_firstname(self):
+        name = self.get_human_name()
+        given = name.given
+        return given[0] if given else ""
+
+    def get_middlename(self):
+        name = self.get_human_name()
+        given = name.given
+        return given[1] if len(given) > 1 else ""
+
+    def get_lastname(self):
+        name = self.get_human_name()
+        return name.family if name else ""
+
+    def get_birthdate(self):
+        return self.resource.birthDate
+
+    def get_estimated_birthdate(self):
+        """Returns whether the birthdate from the patient resource is
+        considered estimated or not
+        """
+        return self.resource.estimatedDateBirth
+
+    def get_address_element(self):
+        """Returns the address of this patient, giving priority to home
+        address first
+        """
+        priority = ["home", "work", "temp", "old"]
+        address = None
+        for use in priority:
+            address = self.resource.get_address(use)
+            if address:
+                break
+        return address
+
+    def get_address(self):
+        """Returns a content dict representation of the resource address
+        """
+        address = self.get_address_element()
+        if not address:
+            return None
+
+        # resolve the address type
+        address_type = address.type or POSTAL_ADDRESS
+        supported = [PHYSICAL_ADDRESS, POSTAL_ADDRESS, OTHER_ADDRESS]
+        if address.type not in supported:
+            address_type = OTHER_ADDRESS
+
+        # resolve the address lines
+        lines = ", ".join(address.line or [])
+
+        # resolve the country
+        country = geo.get_country(address.country, default=None)
+        country = country.name if country else ""
+
+        # resolve the state (as a sub-unit of country)
+        state = address.state or ""
+        if country and state:
+            sub = geo.get_subdivision(state, parent=country)
+            state = sub.name if sub else state
+
+        # resolve the district
+        district = address.district or ""
+        if country and state:
+            sub = geo.get_subdivision(district, parent=state, default=None)
+            if not sub:
+                sub = geo.get_subdivision(district, parent=country,
+                                          default=None)
+            district = sub.name if sub else district
+
+        # resolve the postal code
+        postal_code = address.postalCode or ""
+
+        # resolve the city
+        city = address.city or ""
+
+        return {
+            "type": address_type,
+            "address": api.safe_unicode(lines),
+            "zip": api.safe_unicode(postal_code),
+            "city": api.safe_unicode(city),
+            "subdivision2": api.safe_unicode(district),
+            "subdivision1": api.safe_unicode(state),
+            "country": api.safe_unicode(country),
+        }
+
+    def get_marital_status(self, default="UNK"):
+        status = self.resource.maritalStatus
+        status = status.coding if status else None
+        status = status[0] if status else None
+        if not status:
+            return default
+
+        code = status.code or ""
+        display = status.display or ""
+        if not any([code, display]):
+            return default
+
+        # get the marital statuses registered in the system
+        reg_key = "senaite.patient.marital_statuses"
+        supported = api.get_registry_record(reg_key)
+
+        # find out if there is a match
+        for status in supported:
+            key = status.get("key")
+            name = status.get("value")
+            if code.lower() in [key.lower(), name.lower()]:
+                return key
+            if display.lower() in [key.lower(), name.lower()]:
+                return key
+
+        # return default
+        return default
+
+    def get_email_elements(self):
+        # get all emails of this patient
+        telecom = self.resource.telecom
+        grouped = group_by(telecom, key="system")
+        return grouped.get("email") or []
+
+    def get_primary_email(self):
+        """Returns the primary email address
+        """
+        emails = self.get_email_elements()
+        grouped = group_by(emails, key="use")
+        element = grouped.get("home")
+        if not element:
+            element = grouped.get("work")
+        return element[0].value if element else None
+
+    def get_additional_emails(self):
+        emails = []
+        for email in self.get_email_elements():
+            emails.append({
+                u"name": api.safe_unicode(email.use),
+                u"email": api.safe_unicode(email.value)
+            })
+        return emails
+
+    def get_phone_elements(self):
+        # get all phones of this patient
+        telecom = self.resource.telecom
+        grouped = group_by(telecom, key="system")
+        return grouped.get("phone") or []
+
+    def get_primary_phone(self):
+        """Returns the primary email address
+        """
+        phones = self.get_phone_elements()
+        grouped = group_by(phones, key="use")
+        element = grouped.get("home")
+        if not element:
+            element = grouped.get("work")
+        return element[0].value if element else None
+
+    def get_additional_phones(self):
+        phones = []
+        for phone in self.get_phone_elements():
+            phones.append({
+                u"name": api.safe_unicode(phone.use),
+                u"phone": api.safe_unicode(phone.value)
+            })
+        return phones

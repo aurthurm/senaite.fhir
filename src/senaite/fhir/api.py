@@ -167,8 +167,7 @@ def create(resource):
     # convert the resource to a content dict
     adapter = queryAdapter(resource, IFHIRToContent)
     if not adapter:
-        logger.warn("Cannot create content for FHIR '%s' resource type. No "
-                    "IFHIRToContent adapter found" % resource.resourceType)
+        logger.warn("Missing IFHIRToContent adapter for %r" % resource)
         return None
 
     data = adapter.to_content_dict()
@@ -178,7 +177,7 @@ def create(resource):
     # create the object
     portal_type = data.pop("portal_type")
     container = data.pop("parent_path")
-    container = api.get_object(container)
+    container = api.get_object_by_path(container)
     return api.create(container, portal_type, **data)
 
 
