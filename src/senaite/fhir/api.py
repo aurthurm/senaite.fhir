@@ -5,6 +5,7 @@ from uuid import UUID
 
 from bika.lims import api
 from persistent.dict import PersistentDict
+from senaite.fhir import logger
 from senaite.fhir.config import FHIR_STORAGE_KEY
 from senaite.fhir.exceptions import FHIRAPIError
 from senaite.fhir.interfaces import IContentToFHIR
@@ -159,10 +160,17 @@ def create(resource):
             # TODO rely on a setting to whether create or not
             # create if it does not exist
             obj = create(entry)
-        objects.append(obj)
+
+        if obj:
+            objects.append(obj)
 
     # convert the resource to a content dict
     adapter = queryAdapter(resource, IFHIRToContent)
+    if not adapter:
+        logger.warn("Cannot create content for FHIR '%s' resource type. No "
+                    "IFHIRToContent adapter found" % resource.resourceType)
+        return None
+
     data = adapter.to_content_dict()
     if not data:
         return None
