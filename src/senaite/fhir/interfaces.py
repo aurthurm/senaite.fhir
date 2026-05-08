@@ -10,6 +10,11 @@ class IFHIRResource(Interface):
     """
 
 
+class IBundleResource(IFHIRResource):
+    """Marker interface for a FHIR's Bundle resource
+    """
+
+
 class IPatientResource(IFHIRResource):
     """Marker interface for a FHIR's Patient resource
     """
@@ -31,6 +36,7 @@ class IFHIRToContent(Interface):
     def to_content_dict(self):
         """Returns a dict suitable for the creation or update of a content
         type object
+        :rtype: dict
         """
 
 

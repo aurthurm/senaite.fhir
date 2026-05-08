@@ -2,6 +2,7 @@
 
 from bika.lims import api
 from senaite.fhir import api as fapi
+from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.r5 import add_route
 from senaite.jsonapi import api
 from senaite.jsonapi import request as req
@@ -47,16 +48,35 @@ def post(context, request, resource_type=None):
     # disable CSRF
     req.disable_csrf_protection()
 
-    # get the FHIR raw records
-    records = req.get_request_data()
-    for record in records:
-
-        # convert to a FHIR resource
-        resource = fapi.to_fhir_resource(record)
-
-        # use the proper adapter for the creation of counterpart contents
-        obj = fapi.create(resource)
+    # get the FHIR resources from the request
+    resources = get_fhir_resources()
+    for resource in resources:
+        # create or update the counterpart object
+        obj = fapi.create_or_update(resource)
 
     # TODO Create and Return a Bundle Response
     # https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html
     return {}
+
+
+def get_fhir_resources():
+    """Returns the resources from the request
+    """
+    resources = []
+
+    # get the FHIR raw records
+    records = req.get_request_data()
+    for record in records:
+        # convert to a FHIR resource
+        resource = fapi.to_fhir_resource(record)
+
+        # if the resource is a Bundle, create/update the entries
+        if IBundleResource.providedBy(resource):
+            for item in resource.entry:
+                item_resource = fapi.to_fhir_resource(item)
+                resources.append(item_resource)
+
+        # append the resource
+        resources.append(resource)
+
+    return resources

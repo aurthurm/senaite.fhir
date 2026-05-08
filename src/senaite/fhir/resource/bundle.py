@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from senaite.fhir.api import to_fhir_resource
+from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.resource import FHIRResource
 from senaite.fhir.resource.operationoutcome import OperationOutcome
+from zope.interface import implementer
 
 
+@implementer(IBundleResource)
 class Bundle(FHIRResource):
 
     @property

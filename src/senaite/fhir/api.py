@@ -139,38 +139,68 @@ def to_fhir_resource(thing, default=_marker):
     return adapter.to_fhir_resource()
 
 
-def create(resource):
-    """Creates a counterpart object for the given FHIR Resource
+def to_content_dict(resource, default=_marker):
+    """Converts the resource to a dict suitable for the creation or edition
+    of AT/DX contents their portal type suits well with the resource type.
+    Raises a ValueError if there is no IFHIRToContent adapter registered for
+    the given resource unless default is set, in which case returns default.
+    :rtype: dict
+    """
+    # convert the resource to a content dict
+    adapter = queryAdapter(resource, IFHIRToContent)
+    if not adapter:
+        msg = "Missing IFHIRToContent adapter for %r" % resource
+        if default is _marker:
+            raise ValueError(msg)
+        logger.warn("Missing IFHIRToContent adapter for %r" % resource)
+        return default
+
+    # use the adapter to convert the resource to a content-suitable dict
+    return adapter.to_content_dict()
+
+
+def create_or_update(resource):
+    """Creates a counterpart object for the given FHIR resource if it does
+    not exist yet. Updates the existing object otherwise.
     """
     if not is_fhir_resource(resource):
         raise ValueError("Type not supported: {}".format(repr(type(resource))))
 
-    # check if already exists
+    obj = get_object(resource, default=None)
+    if not obj:
+        return create(resource)
+    return update(resource)
+
+
+def update(resource):
+    """Updates the counterpart object for the given FHIR resource
+    """
+    # get the content dict
+    data = to_content_dict(resource)
+    # get the object
+    obj = get_object(resource)
+    # update the object
+    api.edit(obj, **data)
+    # link the FHIR resource to the obj
+    link_fhir_resource(obj, resource)
+    # re-catalog the object
+    obj.reindexObject()
+    return obj
+
+
+def create(resource):
+    """Creates a counterpart object for the given FHIR Resource
+    """
+    # get the uid
     uid = get_uid(resource)
-    obj = api.get_object_by_uid(uid, default=None)
+
+    # check if already exists
+    obj = get_object(resource, default=None)
     if obj:
-        raise ValueError("Object with UID '%s' exists: %r" % (uid, obj))
+        raise ValueError("Counterpart object already exists: %r" % resource)
 
-    # create the underlying entries/dependencies first
-    objects = []
-    entries = getattr(resource, "entry", [])
-    for entry in entries:
-        obj = get_object(entry, default=None)
-        if not obj:
-            # TODO rely on a setting to whether create or not
-            # create if it does not exist
-            obj = create(entry)
-
-        if obj:
-            objects.append(obj)
-
-    # convert the resource to a content dict
-    adapter = queryAdapter(resource, IFHIRToContent)
-    if not adapter:
-        logger.warn("Missing IFHIRToContent adapter for %r" % resource)
-        return None
-
-    data = adapter.to_content_dict()
+    # get the content dict
+    data = to_content_dict(resource, default=None)
     if not data:
         return None
 
@@ -180,14 +210,25 @@ def create(resource):
     container = api.get_object_by_path(container)
     obj = api.create(container, portal_type, **data)
 
+    # un-catalog the object
+    api.uncatalog_object(obj)
+
+    # set the uid of the FHIR resource
+    if api.is_dexterity_content(obj):
+        setattr(obj, "_plone.uuid", uid)
+    elif api.is_at_content(obj):
+        setattr(obj, "_at_uid", uid)
+
     # link the FHIR resource to the obj
     link_fhir_resource(obj, resource)
 
+    # re-catalog the object
+    api.catalog_object(obj)
     return obj
 
 
 def link_fhir_resource(obj, resource):
-    """Assigns a FHIR  resource to the given obj
+    """Assigns a FHIR resource to the given obj
     """
     if not is_fhir_resource(resource):
         raise ValueError("Type not supported: {}".format(repr(type(resource))))
