@@ -2,6 +2,7 @@
 
 from bika.lims import api
 from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
+from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir.converter import get_by_key
 from senaite.fhir.converter import get_emails
 from senaite.fhir.converter import get_phones
@@ -156,4 +157,4 @@ class ResourceToPerson(object):
         """
         uses = ["work", "home", "temp", "billing", "old"]
         address = self.get_primary_address("postal", uses)
-        return to_content_address(address, default_type=PHYSICAL_ADDRESS)
+        return to_content_address(address, default_type=POSTAL_ADDRESS)
