@@ -35,10 +35,16 @@ class PatientResource(FHIRResource):
 
     @property
     def gender(self):
+        """The administrative gender of the patient
+        Value set: male | female | other | unknown
+        https://hl7.org/fhir/R5/valueset-administrative-gender.html
+        """
         return self.get("gender")
 
     @property
     def birthDate(self):
+        """The date on which the patient was born
+        """
         return dtime.to_dt(self.get("birthDate"))
 
     @property
