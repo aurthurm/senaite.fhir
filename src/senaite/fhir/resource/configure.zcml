@@ -6,7 +6,9 @@
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".bundle.Bundle"/>
 
-  <!-- Organization -->
+  <!-- Organization
+  # TODO FHIR Client Resource does not exist, but Organization.
+        Maybe use named adapter? -->
   <adapter name="Organization"
            for="dict"
            provides="senaite.fhir.interfaces.IFHIRResource"

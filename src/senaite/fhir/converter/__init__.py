@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 import collections
 
+from bika.lims import api
+from senaite.core.api import geo
+from senaite.core.schema.addressfield import OTHER_ADDRESS
+from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
+from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir.config import FHIR_BASE_URL
 
 
@@ -36,3 +41,58 @@ def group_by(items, key):
         val = item.get(key)
         groups.setdefault(val, []).append(item)
     return groups
+
+
+def to_content_address(address, default_type=POSTAL_ADDRESS):
+    """Converts the FHIR Address element to a dict representation suitable for
+    Address fields of AT/DX contents
+    """
+    if not address:
+        return None
+
+    # resolve the address type
+    address_type = address.type or default_type
+    supported = [PHYSICAL_ADDRESS, POSTAL_ADDRESS, OTHER_ADDRESS]
+    if address_type not in supported:
+        address_type = default_type
+
+    # resolve the address lines
+    lines = ", ".join(address.line or [])
+
+    # resolve the country
+    country = geo.get_country(address.country, default=None)
+    country = country.name if country else ""
+
+    # resolve the state (as a sub-unit of country)
+    state = address.state or ""
+    if country and state:
+        sub = geo.get_subdivision(state, parent=country)
+        state = sub.name if sub else state
+
+    # resolve the district
+    district = address.district or ""
+    if country and state:
+        sub = geo.get_subdivision(district, parent=state, default=None)
+        if not sub:
+            sub = geo.get_subdivision(district, parent=country, default=None)
+        district = sub.name if sub else district
+
+    # resolve the postal code
+    postal_code = address.postalCode or ""
+
+    # resolve the city
+    city = address.city or ""
+
+    return {
+        "address": api.safe_unicode(lines),
+        "zip": api.safe_unicode(postal_code),
+        "city": api.safe_unicode(city),
+        "country": api.safe_unicode(country),
+        # Suport for DX types
+        "type": address_type,
+        "subdivision2": api.safe_unicode(district),
+        "subdivision1": api.safe_unicode(state),
+        # support for AT types
+        "district": api.safe_unicode(district),
+        "state": api.safe_unicode(state),
+    }

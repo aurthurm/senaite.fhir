@@ -8,4 +8,11 @@
   <adapter for="senaite.fhir.interfaces.IPatientResource"
            factory=".patient.ResourceToPatient"/>
 
+  <!-- FHIR To Client
+  # TODO FHIR Client Resource does not exist, but Organization, but we need
+         this conversion to get the proper converter. Maybe use named adapter?
+  -->
+  <adapter for="senaite.fhir.interfaces.IOrganizationResource"
+           factory=".client.ResourceToClient"/>
+
 </configure>

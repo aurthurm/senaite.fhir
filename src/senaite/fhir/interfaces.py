@@ -12,11 +12,25 @@ class IFHIRResource(Interface):
 
 class IBundleResource(IFHIRResource):
     """Marker interface for a FHIR's Bundle resource
+    https://fhir.senaite.org/StructureDefinition-SenaiteRequestBundle.html
     """
+
+
+class IOrganizationResource(IFHIRResource):
+    """Marker interface for FHIR's Organization resource
+    https://fhir.senaite.org/StructureDefinition-SenaiteOrganization.html
+    """
+
+
+class IClientResource(IOrganizationResource):
+    """Marker interface for FHIR's Client artifact resource
+    """
+    # TODO This is not FHIR-compliant
 
 
 class IPatientResource(IFHIRResource):
     """Marker interface for a FHIR's Patient resource
+    https://fhir.senaite.org/StructureDefinition-SenaitePatient.html
     """
 
 

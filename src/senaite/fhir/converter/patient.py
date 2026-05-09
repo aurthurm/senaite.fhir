@@ -8,6 +8,7 @@ from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
 from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir import api as fapi
 from senaite.fhir.converter import group_by
+from senaite.fhir.converter import to_content_address
 from senaite.fhir.converter import to_fhir_identifier as to_fhir_id
 from senaite.fhir.converter import to_fhir_profile_url
 from senaite.fhir.interfaces import IContentToFHIR
@@ -221,52 +222,7 @@ class ResourceToPatient(object):
         """Returns a content dict representation of the resource address
         """
         address = self.get_address_element()
-        if not address:
-            return None
-
-        # resolve the address type
-        address_type = address.type or POSTAL_ADDRESS
-        supported = [PHYSICAL_ADDRESS, POSTAL_ADDRESS, OTHER_ADDRESS]
-        if address.type not in supported:
-            address_type = OTHER_ADDRESS
-
-        # resolve the address lines
-        lines = ", ".join(address.line or [])
-
-        # resolve the country
-        country = geo.get_country(address.country, default=None)
-        country = country.name if country else ""
-
-        # resolve the state (as a sub-unit of country)
-        state = address.state or ""
-        if country and state:
-            sub = geo.get_subdivision(state, parent=country)
-            state = sub.name if sub else state
-
-        # resolve the district
-        district = address.district or ""
-        if country and state:
-            sub = geo.get_subdivision(district, parent=state, default=None)
-            if not sub:
-                sub = geo.get_subdivision(district, parent=country,
-                                          default=None)
-            district = sub.name if sub else district
-
-        # resolve the postal code
-        postal_code = address.postalCode or ""
-
-        # resolve the city
-        city = address.city or ""
-
-        return {
-            "type": address_type,
-            "address": api.safe_unicode(lines),
-            "zip": api.safe_unicode(postal_code),
-            "city": api.safe_unicode(city),
-            "subdivision2": api.safe_unicode(district),
-            "subdivision1": api.safe_unicode(state),
-            "country": api.safe_unicode(country),
-        }
+        return to_content_address(address)
 
     def get_marital_status(self, default="UNK"):
         status = self.resource.maritalStatus
