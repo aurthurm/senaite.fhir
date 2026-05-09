@@ -36,4 +36,11 @@ class Bundle(FHIRResource):
             if resource:
                 resources.append(resource)
 
-        return resources
+        # TODO Sorting of entries from inside a Bundle is not neat
+        # sort the entries so they are processed in the right order
+        order = ["Organization", "Practitioner", "Patient"]
+        return sorted(
+            resources,
+            key=lambda en: order.index(en.resourceType)
+            if en.resourceType in order else len(order)
+        )

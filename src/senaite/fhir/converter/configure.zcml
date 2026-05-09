@@ -15,4 +15,11 @@
   <adapter for="senaite.fhir.interfaces.IOrganizationResource"
            factory=".client.ResourceToClient"/>
 
+  <!-- FHIR To Contact
+  # TODO FHIR Contact Resource does not exist, but Practitioner, but we need
+         this conversion to get the proper converter. Maybe use named adapter?
+  -->
+  <adapter for="senaite.fhir.interfaces.IPractitionerResource"
+           factory=".contact.ResourceToContact"/>
+
 </configure>

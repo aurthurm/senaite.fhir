@@ -96,3 +96,28 @@ def to_content_address(address, default_type=POSTAL_ADDRESS):
         "district": api.safe_unicode(district),
         "state": api.safe_unicode(state),
     }
+
+
+def get_telecom_elements(telecom, system, use=None):
+    """Returns the element from the telecom (ContactPoint) provided for the
+    given system and use
+    """
+    by_system = group_by(telecom, key="system")
+    elements = by_system.get(system) or []
+    if use is None:
+        return elements
+    by_use = group_by(elements, key="use")
+    return by_use.get(use) or []
+
+
+def get_emails(telecom, use=None):
+    """Returns the email elements from the telecom (ContactPoint) provided
+    """
+    return get_telecom_elements(telecom, "email", use=use)
+
+
+def get_phones(telecom, use=None):
+    """Returns the phone elements from the telecom (ContactPoint) provided
+    """
+    return get_telecom_elements(telecom, "phone", use=use)
+

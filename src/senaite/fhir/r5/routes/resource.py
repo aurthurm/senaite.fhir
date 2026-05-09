@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import copy
 
 from bika.lims import api
 from senaite.fhir import api as fapi
@@ -70,11 +71,20 @@ def get_fhir_resources():
         # convert to a FHIR resource
         resource = fapi.to_fhir_resource(record)
 
-        # if the resource is a Bundle, create/update the entries
+        # if the resource is a Bundle, extract all contained resources
         if IBundleResource.providedBy(resource):
-            for item in resource.entry:
-                item_resource = fapi.to_fhir_resource(item)
-                resources.append(item_resource)
+            # build a dict of resourceType:uid to passthrough as siblings
+            entries = resource.entry
+            siblings = {en.resourceType:fapi.get_uid(en) for en in entries}
+            for entry in entries:
+                # convert each entry to a FHIR resource
+                entry_res = fapi.to_fhir_resource(entry)
+                if not entry_res:
+                    continue
+                # inject the siblings
+                entry_res["siblings"] = copy.deepcopy(siblings)
+                # add to the resources list
+                resources.append(entry_res)
 
         # append the resource
         resources.append(resource)

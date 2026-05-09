@@ -28,6 +28,18 @@ class IClientResource(IOrganizationResource):
     # TODO This is not FHIR-compliant
 
 
+class IPractitionerResource(IFHIRResource):
+    """Marker interface for a FHIR's Practitioner resource
+    https://fhir.senaite.org/StructureDefinition-SenaitePractitioner.html
+    """
+
+
+class IContactResource(IPractitionerResource):
+    """Marker interface for a FHIR's Contact artifact resource
+    """
+    # TODO This is not FHIR-compliant
+
+
 class IPatientResource(IFHIRResource):
     """Marker interface for a FHIR's Patient resource
     https://fhir.senaite.org/StructureDefinition-SenaitePatient.html
