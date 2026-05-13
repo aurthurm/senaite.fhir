@@ -8,7 +8,7 @@ https://fhir.senaite.org/Patient-52f941c6-81a0-51be-b1a6-f92ac079be34.json
 
 Running this test from the buildout directory:
 
-    bin/test test_doctests -t fhir_patient_read
+    bin/test test_doctests -t patient_read
 
 
 Test Setup
