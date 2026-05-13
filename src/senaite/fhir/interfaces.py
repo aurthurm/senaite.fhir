@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 
 
+from senaite.patient import ISenaitePatientLayer
 from zope.interface import Interface
 
+
+class ISenaiteFHIRLayer(ISenaitePatientLayer):
+    """Zope 3 browser Layer interface specific for senaite.fhir
+    This interface is referred in profiles/default/browserlayer.xml.
+    All views and viewlets register against this layer will appear in the site
+    only when the add-on installer has been run.
+    """
 
 
 class IFHIRResource(Interface):

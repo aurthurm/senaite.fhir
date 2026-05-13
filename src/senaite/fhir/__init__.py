@@ -2,13 +2,23 @@
 
 import logging
 
+from zope.i18nmessageid import MessageFactory
+
 from .browser import router
 
 PRODUCT_NAME = "senaite.fhir"
 FHIR_CURRENT_VERSION = "r5"
 DEFAULT_ROUTE = "senaite.fhir.get"
 
+messageFactory = MessageFactory(PRODUCT_NAME)
+_ = messageFactory
+
 logger = logging.getLogger(PRODUCT_NAME)
+
+
+def initialize(context):
+    """Initializer called when used as a Zope 2 product."""
+    logger.info("*** Initializing SENAITE FHIR Customization Package ***")
 
 
 def add_route(route, endpoint=None, fhir_version=FHIR_CURRENT_VERSION, **kw):
