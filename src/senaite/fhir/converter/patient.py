@@ -2,10 +2,6 @@
 
 from bika.lims import api
 from senaite.core.api import dtime
-from senaite.core.api import geo
-from senaite.core.schema.addressfield import OTHER_ADDRESS
-from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
-from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir import api as fapi
 from senaite.fhir.converter import group_by
 from senaite.fhir.converter import to_content_address
