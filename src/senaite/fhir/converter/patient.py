@@ -18,6 +18,24 @@ from zope.component import adapter
 from zope.interface import implementer
 
 
+# senaite.patient gender key -> FHIR R5 administrative-gender code
+# https://hl7.org/fhir/R5/valueset-administrative-gender.html
+#
+# TODO Lossy mapping: FHIR administrative-gender has no distinction between
+# transgender and diverse, so both "t" and "d" collapse to "other". A
+# round-trip Patient("t") -> FHIR("other") -> Patient("d") loses the original
+# value (see ResourceToPatient.get_gender below, which maps "other" back to
+# "d"). Carrying the SENAITE-specific identity in a dedicated extension
+# (e.g. patient-genderIdentity) would preserve it across conversions.
+GENDER_TO_FHIR = {
+    "m": "male",
+    "f": "female",
+    "t": "other",
+    "d": "other",
+    "": "unknown",
+}
+
+
 @adapter(IPatient)
 @implementer(IContentToFHIR)
 class PatientToResource(object):
@@ -61,9 +79,12 @@ class PatientToResource(object):
             "given": list(filter(None, given)),
             "use": "official",
         }
+
         dob = self.patient.getBirthdate()
         data["birthDate"] = dtime.date_to_string(dob)
-        data["gender"] = self.patient.getGenderText()
+
+        gender = self.patient.getGender() or ""
+        data["gender"] = GENDER_TO_FHIR.get(gender, "unknown")
 
         return PatientResource(data)
 

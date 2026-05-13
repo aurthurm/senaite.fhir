@@ -93,13 +93,18 @@ The resource type matches the reference:
     >>> resource["resourceType"] == reference["resourceType"]
     True
 
-The administrative gender resolves to the female value of the
-``administrative-gender`` value set, and the date of birth matches the
-reference (the converter currently emits the gender display label, so
-match case-insensitively against either the FHIR code or the SENAITE
-label):
+The administrative gender and the date of birth match the reference.
 
-    >>> resource["gender"].lower() in (reference["gender"], "woman", "f")
+.. note::
+
+   The Patient -> FHIR gender mapping is lossy: ``administrative-gender``
+   only defines ``male | female | other | unknown``, so both SENAITE
+   ``t`` (transgender) and ``d`` (diverse) collapse to ``other`` and a
+   round-trip ``t -> other -> d`` loses the original key. Preserving it
+   requires a dedicated extension (e.g. ``patient-genderIdentity``) and
+   is out of scope for this test.
+
+    >>> resource["gender"] == reference["gender"]
     True
 
     >>> resource["birthDate"] == reference["birthDate"]
