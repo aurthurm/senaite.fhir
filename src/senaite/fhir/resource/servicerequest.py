@@ -3,6 +3,7 @@
 from senaite.fhir.datatype.annotation import Annotation
 from senaite.fhir.datatype.codeableconcept import CodeableConcept
 from senaite.fhir.datatype.codeablereference import CodeableReference
+from senaite.fhir.datatype.extension import Extension
 from senaite.fhir.datatype.orderdetail.parameter import OrderDetailParameter
 from senaite.fhir.datatype.reference import Reference
 from senaite.fhir.resource import FHIRResource
@@ -113,3 +114,24 @@ class ServiceRequestResource(FHIRResource):
         """
         items = self.get("note") or []
         return [Annotation(item) for item in items]
+
+    @property
+    def extension(self):
+        items = self.get("extension") or []
+        return [Extension(item) for item in items]
+
+    @property
+    def client(self):
+        """The submitting client organisation
+        A direct reference to the Organisation that is placing this laboratory
+        request. In SENAITE this maps to the Client registered in the LIMS. If
+        the client is not yet known, it will be created on receipt.
+        """
+        # TODO move this url out of here
+        url = "https://fhir.senaite.org/StructureDefinition/SenaiteClient"
+        for ext in self.extension:
+            if ext.url == url:
+                ref = ext.get("valueReference")
+                if ref:
+                    return Reference(ref)
+        return None

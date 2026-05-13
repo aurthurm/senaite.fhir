@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from senaite.fhir.datatype.element import Element
+from senaite.fhir import api as fapi
 
 
 class Reference(Element):
@@ -25,3 +26,17 @@ class Reference(Element):
         Value set at https://hl7.org/fhir/R5/valueset-resource-types.html
         """
         return self.get("type")
+
+    def UID(self):
+        """Handy accessor that returns the UID hex form of the reference
+        Mimics the default behavior of AT/DX
+        """
+        if not self.reference:
+            return None
+        # remove the resource type, if any
+        raw_id = self.reference.split("/")[-1]
+        try:
+            uuid = fapi.get_uuid(raw_id)
+        except (TypeError, ValueError):
+            return None
+        return uuid.hex

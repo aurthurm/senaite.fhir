@@ -52,7 +52,6 @@ def post(context, request, resource_type=None):
     # get the FHIR resources from the request
     resources = get_fhir_resources()
     for resource in resources:
-
         if fapi.can_create_or_update(resource):
             # create or update the counterpart object
             obj = fapi.create_or_update(resource)
