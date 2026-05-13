@@ -52,8 +52,16 @@ def post(context, request, resource_type=None):
     # get the FHIR resources from the request
     resources = get_fhir_resources()
     for resource in resources:
-        # create or update the counterpart object
-        obj = fapi.create_or_update(resource)
+
+        if fapi.can_create_or_update(resource):
+            # create or update the counterpart object
+            obj = fapi.create_or_update(resource)
+        else:
+            # search for the object
+            obj = fapi.get_object(resource, default=None)
+
+        if not obj and not IBundleResource.providedBy(resource):
+            fapi.fail(msg="No object found for %r" % resource)
 
     # TODO Create and Return a Bundle Response
     # https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html

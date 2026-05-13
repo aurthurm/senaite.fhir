@@ -14,7 +14,9 @@ from senaite.fhir.interfaces import IFHIRResource
 from senaite.fhir.interfaces import IFHIRToContent
 from zope.annotation.interfaces import IAnnotations
 from zope.component import queryAdapter
+from zope.event import notify
 from zope.interface import alsoProvides
+from zope.lifecycleevent import ObjectModifiedEvent
 
 _marker = object()
 
@@ -159,6 +161,29 @@ def to_content_dict(resource, default=_marker):
     return adapter.to_content_dict()
 
 
+def can_create_or_update(resource):
+    """Returns whether the creation of counterpart objects for the given
+    resources is supported
+    """
+    if not is_fhir_resource(resource):
+        raise ValueError("Type not supported: {}".format(repr(type(resource))))
+
+    # TODO Make this configurable with a senaite.fhir-specific control panel
+    supported_types = [
+        "ServiceRequest", "Patient", "Practitioner", "Organization"
+    ]
+    if resource.resourceType not in supported_types:
+        return False
+
+    # Check if there is a FHIRToContent adapter registered
+    adapter = queryAdapter(resource, IFHIRToContent)
+    if not adapter:
+        logger.warn("Can create or update, but FHIRToContent missing: %r" %
+                    resource)
+        return False
+    return True
+
+
 def create_or_update(resource):
     """Creates a counterpart object for the given FHIR resource if it does
     not exist yet. Updates the existing object otherwise.
@@ -224,6 +249,15 @@ def create(resource):
 
     # re-catalog the object
     api.catalog_object(obj)
+
+    # TODO Consider to apply this to senaite.core's api.catalog_object
+    # api.catalog_object only re-adds AT content to uid_catalog; for DX
+    # content we rely on plone.app.referenceablebehavior, which re-indexes
+    # the object in uid_catalog on ObjectModifiedEvent. Without this, the
+    # patched UID is invisible to api.get_object_by_uid afterwards.
+    if api.is_dexterity_content(obj):
+        notify(ObjectModifiedEvent(obj))
+
     return obj
 
 
