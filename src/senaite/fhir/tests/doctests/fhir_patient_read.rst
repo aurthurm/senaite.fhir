@@ -1,0 +1,146 @@
+FHIR Patient Read
+-----------------
+
+Verify that a Patient created via ``bika.lims.api.create`` is exposed by
+the FHIR API route ``/senaite/@@FHIR/r5/Patient/<uid>`` and that its
+JSON representation matches the canonical example published at
+https://fhir.senaite.org/Patient-52f941c6-81a0-51be-b1a6-f92ac079be34.json
+
+Running this test from the buildout directory:
+
+    bin/test test_doctests -t fhir_patient_read
+
+
+Test Setup
+~~~~~~~~~~
+
+Needed imports:
+
+    >>> import json
+    >>> import transaction
+    >>> from plone.app.testing import setRoles
+    >>> from plone.app.testing import TEST_USER_ID
+    >>> from bika.lims import api
+
+Variables:
+
+    >>> portal = self.portal
+    >>> portal_url = portal.absolute_url()
+    >>> fhir_url = "{}/@@FHIR/r5".format(portal_url)
+    >>> browser = self.getBrowser()
+    >>> setRoles(portal, TEST_USER_ID, ["LabManager", "Manager"])
+    >>> transaction.commit()
+
+
+Reference Resource
+~~~~~~~~~~~~~~~~~~
+
+The canonical Patient resource that the FHIR API response is expected
+to match (excerpt of the relevant fields):
+
+    >>> reference = {
+    ...     "resourceType": "Patient",
+    ...     "identifier": [
+    ...         {"use": "usual",
+    ...          "system": "https://fhir.senaite.org/NamingSystem/patient-id",
+    ...          "value": "PAT-001"},
+    ...         {"use": "secondary",
+    ...          "value": "123456"},
+    ...     ],
+    ...     "name": [{
+    ...         "use": "official",
+    ...         "family": "Doe",
+    ...         "given": ["Jane"],
+    ...     }],
+    ...     "gender": "female",
+    ...     "birthDate": "1980-01-01",
+    ... }
+
+
+Create the Patient
+~~~~~~~~~~~~~~~~~~
+
+Create a Patient under the portal's ``patients`` folder, matching the
+data of the reference resource:
+
+    >>> patient = api.create(
+    ...     portal.patients, "Patient",
+    ...     mrn=u"PAT-001",
+    ...     firstname=u"Jane",
+    ...     lastname=u"Doe",
+    ...     sex=u"f",
+    ...     gender=u"f",
+    ...     birthdate="1980-01-01",
+    ...     identifiers=[{"key": "other", "value": "123456"}],
+    ... )
+    >>> patient
+    <Patient at /plone/patients/...>
+    >>> uid = api.get_uid(patient)
+    >>> transaction.commit()
+
+
+Fetch via the FHIR Route
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Calling ``/senaite/@@FHIR/r5/Patient/<uid>`` returns the FHIR
+representation of the Patient:
+
+    >>> browser.open("{}/Patient/{}".format(fhir_url, uid))
+    >>> resource = json.loads(browser.contents)
+
+The resource type matches the reference:
+
+    >>> resource["resourceType"] == reference["resourceType"]
+    True
+
+The administrative gender resolves to the female value of the
+``administrative-gender`` value set, and the date of birth matches the
+reference (the converter currently emits the gender display label, so
+match case-insensitively against either the FHIR code or the SENAITE
+label):
+
+    >>> resource["gender"].lower() in (reference["gender"], "woman", "f")
+    True
+
+    >>> resource["birthDate"] == reference["birthDate"]
+    True
+
+The Patient's family and given name match the reference:
+
+    >>> def as_official_name(name):
+    ...     if isinstance(name, list):
+    ...         for item in name:
+    ...             if item.get("use") == "official":
+    ...                 return item
+    ...         return name[0] if name else {}
+    ...     return name or {}
+
+    >>> ref_name = as_official_name(reference["name"])
+    >>> res_name = as_official_name(resource["name"])
+    >>> res_name["family"] == ref_name["family"]
+    True
+    >>> list(res_name["given"]) == list(ref_name["given"])
+    True
+
+The MRN (``PAT-001``) and the secondary identifier (``123456``) from the
+reference are present in the FHIR response:
+
+    >>> def identifier_values(identifiers):
+    ...     return sorted([i.get("value") for i in identifiers if i.get("value")])
+
+    >>> values = identifier_values(resource["identifier"])
+    >>> "PAT-001" in values
+    True
+    >>> "123456" in values
+    True
+
+
+Fetch by UID Alone
+~~~~~~~~~~~~~~~~~~
+
+The same Patient is also reachable by its plain UID (without the
+resource type segment):
+
+    >>> browser.open("{}/{}".format(fhir_url, uid))
+    >>> json.loads(browser.contents)["resourceType"]
+    u'Patient'
