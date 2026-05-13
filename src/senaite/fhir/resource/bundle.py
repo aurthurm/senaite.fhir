@@ -28,10 +28,10 @@ class Bundle(FHIRResource):
         resources = []
         for entry in entries:
             # TODO fullUrl (e.g. urn:uuid:ddaf107d-a44d-4b7b-966b-65d82de495cc)
-            full_url = entry.get("fullUrl")
+            # full_url = entry.get("fullUrl")
             raw_resource = entry.get("resource")
 
-            # TODO Only interested on resources that resolve to our own FHIRResource
+            # TODO Only interested on resources resolving to our FHIRResource
             resource = to_fhir_resource(raw_resource, default=None)
             if resource:
                 resources.append(resource)

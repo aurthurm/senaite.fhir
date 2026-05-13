@@ -52,12 +52,14 @@ def get_fhir_storage(obj):
         annotation[FHIR_STORAGE_KEY] = PersistentDict()
     return annotation[FHIR_STORAGE_KEY]
 
+
 def is_uuid(thing):
     try:
         get_uuid(thing)
         return True
     except (TypeError, ValueError):
         return False
+
 
 def get_uuid(thing):
     """Returns the UUID object

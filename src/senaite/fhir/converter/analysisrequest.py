@@ -4,7 +4,6 @@ from senaite.fhir.interfaces import IFHIRToContent
 from senaite.fhir.interfaces import IServiceRequestResource
 from zope.component import adapter
 from zope.interface import implementer
-from senaite.fhir import api as fapi
 from bika.lims import api
 
 
@@ -17,7 +16,6 @@ class ResourceToAnalysisRequest(object):
 
     def to_content_dict(self):
         # TODO We don't validate category + SNOMED code (is necessary?)
-        import pdb;pdb.set_trace()
         # get the sample_type
         sample_type = self.get_sample_type()
 
@@ -29,9 +27,14 @@ class ResourceToAnalysisRequest(object):
 
         # get the services
         services = self.get_services()
+        services = [api.get_uid(service) for service in services]
 
-        return {}
-
+        return {
+            "SampleType": api.get_uid(sample_type),
+            "Contact": api.get_uid(requester),
+            "Client": api.get_uid(client),
+            "Services": [services],
+        }
 
     def get_reference_obj(self, key):
         ref = getattr(self.resource, key, None)

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from senaite.fhir.datatype.codeableconcept import CodeableConcept
-from senaite.fhir.datatype.coding import Coding
 
 
 class CodeableReference(dict):

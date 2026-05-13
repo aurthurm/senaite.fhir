@@ -2,6 +2,7 @@
 
 from senaite.core.api import dtime
 
+
 class Period(dict):
 
     @property

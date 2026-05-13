@@ -34,6 +34,7 @@ def get_by_key(items, key, value, default=None):
             return item
     return default
 
+
 def group_by(items, key):
     groups = collections.OrderedDict()
     items = items if items else []
@@ -120,4 +121,3 @@ def get_phones(telecom, use=None):
     """Returns the phone elements from the telecom (ContactPoint) provided
     """
     return get_telecom_elements(telecom, "phone", use=use)
-

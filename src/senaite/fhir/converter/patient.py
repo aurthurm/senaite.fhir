@@ -67,7 +67,7 @@ class PatientToResource(object):
             "id": str(uuid),
             "status": api.get_review_status(self.patient),
             "meta": {
-                "profile": [ profile_url ],
+                "profile": [profile_url],
                 "lastUpdated": modified,
             },
             "identifier": self.get_fhir_identifiers(),
@@ -119,7 +119,7 @@ class ResourceToPatient(object):
         estimated = self.get_estimated_birthdate()
 
         # Address
-        address  = self.get_address()
+        address = self.get_address()
 
         # Marital status
         marital = self.get_marital_status()

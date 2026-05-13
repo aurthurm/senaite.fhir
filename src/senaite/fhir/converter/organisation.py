@@ -27,7 +27,7 @@ class ResourceToOrganisation(object):
         data = {"Name": name}
 
         # Addresses
-        address  = self.get_address()
+        address = self.get_address()
         if address.get("type") == PHYSICAL_ADDRESS:
             data["PhysicalAddress"] = address
         elif address.get("type") == POSTAL_ADDRESS:
@@ -48,7 +48,7 @@ class ResourceToOrganisation(object):
         # Email
         email = self.get_email()
         if email:
-            data["EmailAddress"] =  api.safe_unicode(email)
+            data["EmailAddress"] = api.safe_unicode(email)
 
         return data
 

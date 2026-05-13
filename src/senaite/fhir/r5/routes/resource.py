@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
 
-from bika.lims import api
 from senaite.fhir import api as fapi
 from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.r5 import add_route
@@ -12,11 +11,10 @@ ENDPOINT = "senaite.fhir.r5"
 ENDPOINT_GET = "%s.get" % ENDPOINT
 ENDPOINT_POST = "%s.post" % ENDPOINT
 
+
 # /<resource_type>
 @add_route("/<string:resource_type>",
            ENDPOINT_GET, methods=["GET"])
-#
-# /<resource_type>/<uid>
 @add_route("/<string:resource_type>/<string(length=32):uid>",
            ENDPOINT_GET, methods=["GET"])
 @add_route("/<string(length=32):uid>",
@@ -82,7 +80,7 @@ def get_fhir_resources():
         if IBundleResource.providedBy(resource):
             # build a dict of resourceType:uid to passthrough as siblings
             entries = resource.entry
-            siblings = {en.resourceType:fapi.get_uid(en) for en in entries}
+            siblings = {en.resourceType: fapi.get_uid(en) for en in entries}
             for entry in entries:
                 # convert each entry to a FHIR resource
                 entry_res = fapi.to_fhir_resource(entry)

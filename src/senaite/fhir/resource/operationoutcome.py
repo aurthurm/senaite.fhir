@@ -4,6 +4,7 @@ from senaite.fhir.resource import FHIRResource
 
 _marker = object()
 
+
 class OperationOutcome(FHIRResource):
 
     @property

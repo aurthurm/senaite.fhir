@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
 
-from isort.settings import default
 from senaite.core.api import dtime
 from senaite.fhir.converter import get_by_key
 from senaite.fhir.datatype.extension import Extension

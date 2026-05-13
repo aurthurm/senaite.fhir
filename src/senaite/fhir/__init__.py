@@ -26,6 +26,7 @@ def add_route(route, endpoint=None, fhir_version=FHIR_CURRENT_VERSION, **kw):
     """
     # slashes cleanup
     route = '/'.join(s.strip('/') for s in ["", fhir_version, route])
+
     def wrapper(f):
         try:
             router.DefaultFHIRRouter.add_url_rule(route,
