@@ -22,4 +22,8 @@
   <adapter for="senaite.fhir.interfaces.IPractitionerResource"
            factory=".contact.ResourceToContact"/>
 
+  <!-- FHIR To AnalysisRequest -->
+  <adapter for="senaite.fhir.interfaces.IServiceRequestResource"
+           factory=".analysisrequest.ResourceToAnalysisRequest"/>
+
 </configure>

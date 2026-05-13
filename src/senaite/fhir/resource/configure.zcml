@@ -26,4 +26,10 @@
            provides="senaite.fhir.interfaces.IFHIRResource"
            factory=".practitioner.PractitionerResource"/>
 
+  <!-- ServiceRequest -->
+  <adapter name="ServiceRequest"
+           for="dict"
+           provides="senaite.fhir.interfaces.IFHIRResource"
+           factory=".servicerequest.ServiceRequestResource"/>
+
 </configure>

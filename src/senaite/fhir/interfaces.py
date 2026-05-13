@@ -54,6 +54,12 @@ class IPatientResource(IFHIRResource):
     """
 
 
+class IServiceRequestResource(IFHIRResource):
+    """Marker interface for a FHIR's ServiceRequest resource
+    https://fhir.senaite.org/StructureDefinition-SenaiteServiceRequest.html
+    """
+
+
 class IContentToFHIR(Interface):
     """Converter of AT/DX content to IFHIRResource
     """
