@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import itertools
 
 from senaite.fhir.datatype.annotation import Annotation
 from senaite.fhir.datatype.codeableconcept import CodeableConcept
@@ -92,7 +93,12 @@ class ServiceRequestResource(FHIRResource):
         https://fhir.senaite.org/StructureDefinition-SenaiteServiceRequest-definitions.html#ServiceRequest.orderDetail
         """
         data = self.get("orderDetail") or []
-        return [OrderDetailParameter(item) for item in data]
+        # get all parameter dicts
+        params = [item.get("parameter") for item in data]
+        # flatten the list
+        params = list(itertools.chain.from_iterable(params))
+        # return OrderedDetailParameter instances
+        return [OrderDetailParameter(param) for param in params if param]
 
     @property
     def subject(self):

@@ -272,11 +272,40 @@ class ResourceToAnalysisRequest(object):
 
         return None
 
+    @memoize
     def get_services(self):
         """Returns the list of services to assign to this sample
         """
-        # TODO Fix empty list
-        return []
+        services = []
+        system = fapi.get_system_code("AnalysisService")
+        for param in self.resource.orderDetail:
+            # get the coding info
+            concept = param.valueCodeableConcept
+            coding = first_by(concept.coding, system=system)
+            # search by code
+            service = self.get_service(coding.code)
+            if service:
+                services.append(service)
+        return services
+
+    def get_service(self, code):
+        # search by keyword
+        query = dict(portal_type="AnalysisService", getKeyword=code)
+        brains = api.search(query, SETUP_CATALOG)
+        if len(brains) == 1:
+            return api.get_object(brains[0])
+
+        # TODO New field External ID in AnalysisService to search by
+        matches = []
+        query = dict(portal_type="AnalysisService")
+        brains = api.search(query, SETUP_CATALOG)
+        services = [api.get_object(brain) for brain in brains]
+        for obj in services:
+            if obj.getProtocolID() == code:
+                matches.append(obj)
+        if len(matches) == 1:
+            return matches[0]
+        return None
 
     @memoize
     def get_profile(self):
@@ -287,7 +316,7 @@ class ResourceToAnalysisRequest(object):
         coding = first_by(panel.coding, system=system)
 
         # search by profile_key
-        query = dict(portal_type="AnalysisProfile", getProfileKey=coding.code)
+        query = dict(portal_type="AnalysisProfile", profile_key=coding.code)
         brains = api.search(query, SETUP_CATALOG)
         if len(brains) == 1:
             return api.get_object(brains[0])
