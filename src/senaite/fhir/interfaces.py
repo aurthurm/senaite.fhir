@@ -60,6 +60,12 @@ class IServiceRequestResource(IFHIRResource):
     """
 
 
+class ISpecimenResource(IFHIRResource):
+    """Marker interface for a FHIR's Specimen resource
+    https://fhir.senaite.org/StructureDefinition-SenaiteServiceRequest.html
+    """
+
+
 class IContentToFHIR(Interface):
     """Converter of AT/DX content to IFHIRResource
     """

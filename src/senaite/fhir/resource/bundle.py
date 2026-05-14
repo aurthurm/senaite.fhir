@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from senaite.fhir.api import to_fhir_resource
+from senaite.fhir.converter import get_by_key
 from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.resource import FHIRResource
 from senaite.fhir.resource.operationoutcome import OperationOutcome
@@ -38,9 +39,16 @@ class Bundle(FHIRResource):
 
         # TODO Sorting of entries from inside a Bundle is not neat
         # sort the entries so they are processed in the right order
-        order = ["Organization", "Practitioner", "Patient"]
+        order = ["Organization", "Practitioner", "Specimen", "Patient",
+                 "ServiceRequest"]
         return sorted(
             resources,
             key=lambda en: order.index(en.resourceType)
             if en.resourceType in order else len(order)
         )
+
+    def first_entry(self, key, value):
+        """Search the first entry whose value for the given key matches with
+        the value passed-in
+        """
+        return get_by_key(self.entry, key, value)

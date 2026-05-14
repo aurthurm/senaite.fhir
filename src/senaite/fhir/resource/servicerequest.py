@@ -6,9 +6,12 @@ from senaite.fhir.datatype.codeablereference import CodeableReference
 from senaite.fhir.datatype.extension import Extension
 from senaite.fhir.datatype.orderdetail.parameter import OrderDetailParameter
 from senaite.fhir.datatype.reference import Reference
+from senaite.fhir.interfaces import IServiceRequestResource
 from senaite.fhir.resource import FHIRResource
+from zope.interface import implementer
 
 
+@implementer(IServiceRequestResource)
 class ServiceRequestResource(FHIRResource):
 
     @property

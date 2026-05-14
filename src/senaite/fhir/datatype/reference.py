@@ -27,16 +27,23 @@ class Reference(Element):
         """
         return self.get("type")
 
-    def UID(self):
-        """Handy accessor that returns the UID hex form of the reference
-        Mimics the default behavior of AT/DX
+    def UUID(self):
+        """Handy accessor that returns the UUID of the reference
         """
         if not self.reference:
             return None
         # remove the resource type, if any
         raw_id = self.reference.split("/")[-1]
+        # remove the urn:uuid:
+        raw_id = raw_id.split(":")[-1]
         try:
-            uuid = fapi.get_uuid(raw_id)
+            return fapi.get_uuid(raw_id)
         except (TypeError, ValueError):
             return None
-        return uuid.hex
+
+    def UID(self):
+        """Handy accessor that returns the UID hex form of the reference
+        Mimics the default behavior of AT/DX
+        """
+        uuid = self.UUID()
+        return uuid.hex if uuid else None

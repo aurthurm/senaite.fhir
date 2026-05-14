@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from senaite.fhir import api as fapi
 from bika.lims import api
 from senaite.fhir.converter.person import ResourceToPerson
 from senaite.fhir.interfaces import IFHIRToContent
@@ -16,10 +17,11 @@ class ResourceToContact(ResourceToPerson):
         """Returns the parent object to which the counterpart object should
         belong to
         """
-        # TODO this 'siblings' dance is a bit ugly
-        siblings = self.resource.get("siblings")
-        parent_uid = siblings.get("Organization")
-        return api.get_object_by_uid(parent_uid, default=None)
+        bundle = self.resource.get("_bundle")
+        if not bundle:
+            return None
+        org = bundle.first_entry("resourceType", "Organization")
+        return fapi.get_object(org, default=None)
 
     def to_content_dict(self):
         # contact should belong to a client (Organization)

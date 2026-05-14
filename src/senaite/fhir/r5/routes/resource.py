@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import copy
 
 from senaite.fhir import api as fapi
 from senaite.fhir.interfaces import IBundleResource
@@ -49,16 +48,13 @@ def post(context, request, resource_type=None):
 
     # get the FHIR resources from the request
     resources = get_fhir_resources()
+
+    objects = []
     for resource in resources:
         if fapi.can_create_or_update(resource):
             # create or update the counterpart object
             obj = fapi.create_or_update(resource)
-        else:
-            # search for the object
-            obj = fapi.get_object(resource, default=None)
-
-        if not obj and not IBundleResource.providedBy(resource):
-            fapi.fail(msg="No object found for %r" % resource)
+            objects.append(obj)
 
     # TODO Create and Return a Bundle Response
     # https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html
@@ -78,16 +74,14 @@ def get_fhir_resources():
 
         # if the resource is a Bundle, extract all contained resources
         if IBundleResource.providedBy(resource):
-            # build a dict of resourceType:uid to passthrough as siblings
-            entries = resource.entry
-            siblings = {en.resourceType: fapi.get_uid(en) for en in entries}
-            for entry in entries:
+            for entry in resource.entry:
                 # convert each entry to a FHIR resource
                 entry_res = fapi.to_fhir_resource(entry)
                 if not entry_res:
                     continue
-                # inject the siblings
-                entry_res["siblings"] = copy.deepcopy(siblings)
+                # assign the bundle so we can resolve references
+                # TODO this '_bundle' dance is a bit ugly
+                entry_res["_bundle"] = resource
                 # add to the resources list
                 resources.append(entry_res)
 

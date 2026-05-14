@@ -2,6 +2,7 @@
 import copy
 
 from senaite.core.api import dtime
+from senaite.fhir.converter import first_by
 from senaite.fhir.converter import get_by_key
 from senaite.fhir.datatype.extension import Extension
 from senaite.fhir.datatype.meta import Meta
@@ -64,6 +65,23 @@ class FHIRResource(dict):
         """Returns an Extension of this resource by url, if any
         """
         return get_by_key(self.extension, key="url", value=url)
+
+    def get_external_id(self):
+        """Returns the Identifier object representing the identifier
+        originating from the API's consumer system (e.g. the ordering EHR or
+        middleware)
+        https://fhir.senaite.org/identifiers.html
+        """
+        identifiers = getattr(self, "identifier", [])
+        return first_by(identifiers, use="secondary")
+
+    def get_object_id(self):
+        """Returns the Identifier object representing the internal identifier
+        created and assigned by SENAITE
+        https://fhir.senaite.org/identifiers.html
+        """
+        identifiers = getattr(self, "identifier", [])
+        return first_by(identifiers, use="usual")
 
     def to_dict(self):
         return copy.deepcopy(dict(self))

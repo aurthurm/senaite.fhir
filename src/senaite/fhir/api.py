@@ -4,9 +4,11 @@ import re
 from uuid import UUID
 
 from bika.lims import api
+from bika.lims.utils.analysisrequest import create_analysisrequest
 from persistent.dict import PersistentDict
 from senaite.fhir import logger
 from senaite.fhir.config import FHIR_STORAGE_KEY
+from senaite.fhir.config import SYSTEM_CODES
 from senaite.fhir.exceptions import FHIRAPIError
 from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.interfaces import IFHIRContent
@@ -235,7 +237,14 @@ def create(resource):
     portal_type = data.pop("portal_type")
     container = data.pop("parent_path")
     container = api.get_object_by_path(container)
-    obj = api.create(container, portal_type, **data)
+
+    # AnalysisRequest objects are created differently
+    # TODO Consider an adapter for create
+    if portal_type == "AnalysisRequest":
+        request = api.get_request()
+        obj = create_analysisrequest(data["Client"], request, data)
+    else:
+        obj = api.create(container, portal_type, **data)
 
     # un-catalog the object
     api.uncatalog_object(obj)
@@ -287,3 +296,15 @@ def slugify(value, repl="-"):
     slug = re.sub(r"[\s_-]+", repl, slug)
     slug = re.sub(r"^-+|-+$", "", slug)
     return slug
+
+
+def get_system_code(resource_type, default=_marker):
+    """Returns the system code supported for the given resource type
+    """
+    # TODO Get this from control panel/registry settings instead
+    system = dict(SYSTEM_CODES).get(resource_type)
+    if system:
+        return system
+    if default is _marker:
+        raise ValueError("No system code defined for %s" % resource_type)
+    return default

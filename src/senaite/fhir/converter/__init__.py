@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import collections
+import copy
 
 from bika.lims import api
 from senaite.core.api import geo
@@ -7,6 +8,7 @@ from senaite.core.schema.addressfield import OTHER_ADDRESS
 from senaite.core.schema.addressfield import PHYSICAL_ADDRESS
 from senaite.core.schema.addressfield import POSTAL_ADDRESS
 from senaite.fhir.config import FHIR_BASE_URL
+from zope.deprecation import deprecate
 
 
 def to_fhir_identifier(system_id, value, use=None):
@@ -27,12 +29,18 @@ def to_fhir_profile_url(resource_type):
     return "%s/StructureDefinition/%s" % (FHIR_BASE_URL, resource_type)
 
 
+@deprecate("Use first_by instead")
 def get_by_key(items, key, value, default=None):
+    kwargs = {key: value}
+    return first_by(items, default=default, **kwargs)
+
+
+def first_by(items, default=None, **kwargs):
     items = items if items else []
-    for item in items:
-        if item.get(key) == value:
-            return item
-    return default
+    matches = [copy.deepcopy(item) for item in items]
+    for key, val in kwargs.items():
+        matches = [item for item in matches if item.get(key) == val]
+    return matches[0] if matches else default
 
 
 def group_by(items, key):
