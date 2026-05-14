@@ -36,7 +36,7 @@ class ResourceToAnalysisRequest(object):
         specs = self.get_specifications()
         sample_point = self.get_sample_point()
         date_sampled = self.get_date_sampled()
-        profiles = self.get_profiles()
+        profile = self.get_profile()
         services = self.get_services()
         priority = self.get_priority()
 
@@ -48,7 +48,7 @@ class ResourceToAnalysisRequest(object):
             "SampleType": sample_type,
             "SamplePoint": sample_point,
             "DateSampled": date_sampled,
-            "Profiles": profiles,
+            "Profiles": [profile] if profile else [],
             "Priority": priority,
             # "Sampler": collector,
             # "Remarks": remarks,
@@ -278,12 +278,37 @@ class ResourceToAnalysisRequest(object):
         # TODO Fix empty list
         return []
 
-    def get_profiles(self):
-        """Returns a list of analysis profiles
+    def get_profile(self):
+        """Returns an analysis profile
         """
-        self.resource.code.concept
-        # TODO Fix empty list
-        return []
+        panel = self.resource.code.concept
+        system = fapi.get_system_code("AnalysisProfile")
+        coding = first_by(panel.coding, system=system)
+
+        # search by profile_key
+        query = dict(portal_type="AnalysisProfile", getProfileKey=coding.code)
+        brains = api.search(query, SETUP_CATALOG)
+        if len(brains) == 1:
+            return api.get_object(brains[0])
+
+        # search by title (from concept.coding.display)
+        display = coding.display
+        if display:
+            # use sortable_title for an ignore case search
+            title = display.lower()
+            query = dict(portal_type="AnalysisProfile", sortable_title=title)
+            brains = api.search(query, SETUP_CATALOG)
+            if len(brains) == 1:
+                return api.get_object(brains[0])
+
+        # search by title (from concept.text)
+        title = panel.text.lower()
+        query = dict(portal_type="AnalysisProfile", sortable_title=title)
+        brains = api.search(query, SETUP_CATALOG)
+        if len(brains) == 1:
+            return api.get_object(brains[0])
+
+        return None
 
     def get_priority(self):
         """Returns the priority

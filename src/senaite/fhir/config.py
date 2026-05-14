@@ -2,9 +2,9 @@
 
 FHIR_BASE_URL = "https://fhir.senaite.org"
 FHIR_STORAGE_KEY = "senaite.fhir.storage"
-SYSTEM_SNOMED_CT = "http://snomed.info/sct"
 
 SYSTEM_CODES = (
-    ("Specimen", SYSTEM_SNOMED_CT),
-    ("SamplePoint", SYSTEM_SNOMED_CT),
+    ("AnalysisProfile", "http://loinc.org"),
+    ("Specimen", "http://snomed.info/sct"),
+    ("SamplePoint", "http://snomed.info/sct"),
 )
