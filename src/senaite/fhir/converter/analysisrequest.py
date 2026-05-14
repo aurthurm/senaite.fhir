@@ -224,6 +224,7 @@ class ResourceToAnalysisRequest(object):
             return api.get_object(brains[0])
         return None
 
+    @memoize
     def get_date_sampled(self):
         """Returns the date when the specimen was collected
         """
@@ -231,6 +232,7 @@ class ResourceToAnalysisRequest(object):
         specimen = self.get_bundle_sibling(ref)
         return specimen.collectedDateTime
 
+    @memoize
     def get_sample_point(self):
         """Returns the sample point from where this specimen was collected
         """
@@ -279,6 +281,7 @@ class ResourceToAnalysisRequest(object):
     def get_profiles(self):
         """Returns a list of analysis profiles
         """
+        self.resource.code.concept
         # TODO Fix empty list
         return []
 

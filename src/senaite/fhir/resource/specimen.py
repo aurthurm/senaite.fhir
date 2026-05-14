@@ -4,6 +4,7 @@ from senaite.core.api import dtime
 from senaite.fhir import api as fapi
 from senaite.fhir.converter import get_by_key
 from senaite.fhir.datatype.codeableconcept import CodeableConcept
+from senaite.fhir.datatype.codeablereference import CodeableReference
 from senaite.fhir.interfaces import ISpecimenResource
 from senaite.fhir.resource import FHIRResource
 from zope.interface import implementer
@@ -28,9 +29,11 @@ class SpecimenResource(FHIRResource):
 
     @property
     def bodySite(self):
-        data = self.collection.get("bodySite")
-        concept = data.get("concept")
-        return CodeableConcept(concept) if concept else None
+        element = self.collection.get("bodySite")
+        if not element:
+            return None
+        reference = CodeableReference(element)
+        return reference.concept
 
     def get_code(self, system=None):
         """Returns the code for the given system. If no system is set, uses
