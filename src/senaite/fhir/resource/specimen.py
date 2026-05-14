@@ -26,6 +26,12 @@ class SpecimenResource(FHIRResource):
         data = self.collection or {}
         return dtime.to_dt(data.get("collectedDateTime"))
 
+    @property
+    def bodySite(self):
+        data = self.collection.get("bodySite")
+        concept = data.get("concept")
+        return CodeableConcept(concept) if concept else None
+
     def get_code(self, system=None):
         """Returns the code for the given system. If no system is set, uses
         the default system

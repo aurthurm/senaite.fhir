@@ -6,4 +6,5 @@ SYSTEM_SNOMED_CT = "http://snomed.info/sct"
 
 SYSTEM_CODES = (
     ("Specimen", SYSTEM_SNOMED_CT),
+    ("SamplePoint", SYSTEM_SNOMED_CT),
 )

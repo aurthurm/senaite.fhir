@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+from senaite.fhir.converter import first_by
 from senaite.fhir.interfaces import IFHIRToContent
 from senaite.fhir.interfaces import IServiceRequestResource
 from zope.component import adapter
@@ -227,13 +227,47 @@ class ResourceToAnalysisRequest(object):
     def get_date_sampled(self):
         """Returns the date when the specimen was collected
         """
-        # TODO see Bundle.specimen.collection.collectedDateTime
-        return None
+        ref = self.get_reference("specimen")
+        specimen = self.get_bundle_sibling(ref)
+        return specimen.collectedDateTime
 
     def get_sample_point(self):
         """Returns the sample point from where this specimen was collected
         """
-        # TODO see Bundle.specimen.collection.bodySite
+        ref = self.get_reference("specimen")
+        specimen = self.get_bundle_sibling(ref)
+        if not specimen:
+            return None
+
+        # get the bodySite coding element
+        if not specimen.bodySite:
+            return None
+
+        system = fapi.get_system_code("SamplePoint")
+        site = first_by(specimen.bodySite.coding, system=system)
+        if not site:
+            return None
+
+        # TODO Consider to add a search function in fapi and use adapters
+        external_id = site.code
+        if external_id:
+            # TODO New field External ID in SamplePoint to search by
+            query = dict(portal_type="SamplePoint", getExternalID=site.code)
+            # brains = api.search(query, SETUP_CATALOG)
+            brains = []
+            if len(brains) == 1:
+                return api.get_object(brains[0])
+
+        # fallback to search by title
+        display = site.display
+        if display:
+            # use sortable_title for an ignore case search
+            title = display.lower()
+            query = dict(portal_type="SamplePoint", sortable_title=title)
+            brains = api.search(query, SETUP_CATALOG)
+            if len(brains) == 1:
+                return api.get_object(brains[0])
+
         return None
 
     def get_services(self):
