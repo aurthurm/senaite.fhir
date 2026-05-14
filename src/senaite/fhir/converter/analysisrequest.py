@@ -278,6 +278,7 @@ class ResourceToAnalysisRequest(object):
         # TODO Fix empty list
         return []
 
+    @memoize
     def get_profile(self):
         """Returns an analysis profile
         """
