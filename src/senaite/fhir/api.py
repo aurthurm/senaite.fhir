@@ -3,7 +3,9 @@
 import re
 from uuid import UUID
 
+from Products.Archetypes.utils import mapply
 from bika.lims import api
+from bika.lims.api.security import check_permission
 from bika.lims.utils.analysisrequest import create_analysisrequest
 from persistent.dict import PersistentDict
 from senaite.fhir import logger
@@ -19,6 +21,7 @@ from zope.component import queryAdapter
 from zope.event import notify
 from zope.interface import alsoProvides
 from zope.lifecycleevent import ObjectModifiedEvent
+from Products.CMFCore.permissions import ModifyPortalContent
 
 _marker = object()
 
@@ -204,12 +207,32 @@ def create_or_update(resource):
 def update(resource):
     """Updates the counterpart object for the given FHIR resource
     """
-    # get the content dict
     data = to_content_dict(resource)
-    # get the object
     obj = get_object(resource)
-    # update the object
-    api.edit(obj, **data)
+
+    # loop through data and set field values
+    fields = api.get_fields(obj)
+    for name, value in data.items():
+        # check if there is a field
+        field = fields.get(name, None)
+        if not field:
+            continue
+        # check if readonly
+        readonly = getattr(field, "readonly", False)
+        if readonly:
+            continue
+        # check permissions
+        perm = getattr(field, "write_permission", ModifyPortalContent)
+        if perm and not check_permission(perm, obj):
+            continue
+
+        # Set the value
+        if hasattr(field, "getMutator"):
+            mutator = field.getMutator(obj)
+            mapply(mutator, value)
+        else:
+            field.set(obj, value)
+
     # link the FHIR resource to the obj
     link_fhir_resource(obj, resource)
     # re-catalog the object
