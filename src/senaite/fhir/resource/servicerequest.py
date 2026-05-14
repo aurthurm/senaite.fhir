@@ -4,6 +4,7 @@ from senaite.fhir.datatype.annotation import Annotation
 from senaite.fhir.datatype.codeableconcept import CodeableConcept
 from senaite.fhir.datatype.codeablereference import CodeableReference
 from senaite.fhir.datatype.extension import Extension
+from senaite.fhir.datatype.identifier import Identifier
 from senaite.fhir.datatype.orderdetail.parameter import OrderDetailParameter
 from senaite.fhir.datatype.reference import Reference
 from senaite.fhir.interfaces import IServiceRequestResource
@@ -13,6 +14,15 @@ from zope.interface import implementer
 
 @implementer(IServiceRequestResource)
 class ServiceRequestResource(FHIRResource):
+
+    @property
+    def identifier(self):
+        """Identifiers assigned to this order instance by the orderer and/or
+        the receiver and/or order fulfiller.
+        https://fhir.senaite.org/StructureDefinition-SenaiteServiceRequest-definitions.html#key_ServiceRequest.identifier
+        """
+        data = self.get("identifier") or []
+        return [Identifier(item) for item in data]
 
     @property
     def status(self):

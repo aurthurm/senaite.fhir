@@ -72,6 +72,7 @@ class FHIRResource(dict):
         middleware)
         https://fhir.senaite.org/identifiers.html
         """
+        # TODO Move this function to fapi.resource
         identifiers = getattr(self, "identifier", [])
         return first_by(identifiers, use="secondary")
 
@@ -80,6 +81,7 @@ class FHIRResource(dict):
         created and assigned by SENAITE
         https://fhir.senaite.org/identifiers.html
         """
+        # TODO Move this function to fapi.resource
         identifiers = getattr(self, "identifier", [])
         return first_by(identifiers, use="usual")
 
