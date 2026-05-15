@@ -20,6 +20,12 @@ class IFHIRResource(Interface):
 
 class IBundleResource(IFHIRResource):
     """Marker interface for a FHIR's Bundle resource
+    https://hl7.org/fhir/R5/bundle.html
+    """
+
+
+class IServiceRequestBundleResource(IBundleResource):
+    """Marker interface for FHIR's Senaite Service Request Bundle
     https://fhir.senaite.org/StructureDefinition-SenaiteRequestBundle.html
     """
 

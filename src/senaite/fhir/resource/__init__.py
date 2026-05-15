@@ -15,6 +15,10 @@ _marker = object()
 @implementer(IFHIRResource)
 class FHIRResource(dict):
 
+    def __init__(self, seq=None, **kwargs):
+        super(FHIRResource, self).__init__(seq, **kwargs)
+        self._validate()
+
     @property
     def resourceType(self):
         """Returns the resource type
@@ -95,6 +99,12 @@ class FHIRResource(dict):
         if as_list:
             return [data_type(record) for record in value]
         return data_type(value)
+
+    def _validate(self):
+        """Looks through all properties and validates any constraint
+        """
+        # TODO Implement (loop through attr and use decorators for constraints)
+        pass
 
     def __str__(self):
         return "<%s %s>" % (self.__class__.__name__, self.id or "--no-id--")

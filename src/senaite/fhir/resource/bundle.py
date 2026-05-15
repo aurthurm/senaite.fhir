@@ -2,9 +2,9 @@
 
 from senaite.fhir.api import to_fhir_resource
 from senaite.fhir.converter import get_by_key
+from senaite.fhir.datatype.identifier import Identifier
 from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.resource import FHIRResource
-from senaite.fhir.resource.operationoutcome import OperationOutcome
 from zope.interface import implementer
 
 
@@ -12,19 +12,40 @@ from zope.interface import implementer
 class Bundle(FHIRResource):
 
     @property
+    def identifier(self):
+        """A persistent identifier for the bundle that won't change as a bundle
+        is copied from server to server.
+        https://hl7.org/fhir/R5/bundle-definitions.html#Bundle.identifier
+        """
+        data = self.get("identifier") or []
+        return [Identifier(item) for item in data]
+
+    @property
     def type(self):
-        return self.get("type")
+        """Indicates the purpose of this bundle, how it is intended to be used.
+        Value set: document | message | transaction | transaction-response |
+                   batch | batch-response | history | searchset | collection |
+                   subscription-notification
+                   https://hl7.org/fhir/R5/valueset-bundle-type.html
+        https://hl7.org/fhir/R5/bundle-definitions.html#Bundle.type
+        """
+        return self["type"]
 
     @property
     def issues(self):
         """Captures issues and warnings that relate to the construction of the
         Bundle and the content within it.
+        https://hl7.org/fhir/R5/bundle-definitions.html#Bundle.issues
         """
         records = self.get("issues") or []
-        return [OperationOutcome(record) for record in records]
+        return [FHIRResource(record) for record in records]
 
     @property
     def entry(self):
+        """An entry in a bundle resource - will either contain a resource or
+        information about a resource (transactions and history only).
+        https://hl7.org/fhir/R5/bundle-definitions.html#Bundle.entry
+        """
         entries = self.get("entry") or []
         resources = []
         for entry in entries:
@@ -36,16 +57,8 @@ class Bundle(FHIRResource):
             resource = to_fhir_resource(raw_resource, default=None)
             if resource:
                 resources.append(resource)
-
-        # TODO Sorting of entries from inside a Bundle is not neat
-        # sort the entries so they are processed in the right order
-        order = ["Organization", "Practitioner", "Specimen", "Patient",
-                 "ServiceRequest"]
-        return sorted(
-            resources,
-            key=lambda en: order.index(en.resourceType)
-            if en.resourceType in order else len(order)
-        )
+        # return the FHIR resources
+        return resources
 
     def first_entry(self, key, value):
         """Search the first entry whose value for the given key matches with

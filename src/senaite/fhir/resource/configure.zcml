@@ -4,7 +4,7 @@
   <adapter name="Bundle"
            for="dict"
            provides="senaite.fhir.interfaces.IFHIRResource"
-           factory=".bundle.Bundle"/>
+           factory=".servicerequestbundle.ServiceRequestBundleResource"/>
 
   <!-- Organization
   # TODO FHIR Client Resource does not exist, but Organization.
