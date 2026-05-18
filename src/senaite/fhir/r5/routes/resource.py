@@ -61,7 +61,6 @@ def post(context, request, resource_type=None):
             continue
 
         # create or update the counterpart object
-        import pdb;pdb.set_trace()
         obj = fapi.get_object(resource, default=None)
         try:
             if not obj:
