@@ -24,6 +24,12 @@ class IBundleResource(IFHIRResource):
     """
 
 
+class IBundleResponseResource(IBundleResource):
+    """Marker interface for FHIR's Senaite Bundle Response
+    https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html
+    """
+
+
 class IServiceRequestBundleResource(IBundleResource):
     """Marker interface for FHIR's Senaite Service Request Bundle
     https://fhir.senaite.org/StructureDefinition-SenaiteRequestBundle.html

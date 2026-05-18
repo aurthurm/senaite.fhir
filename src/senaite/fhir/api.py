@@ -3,11 +3,13 @@
 import re
 from uuid import UUID
 
-from Products.Archetypes.utils import mapply
 from bika.lims import api
 from bika.lims.api.security import check_permission
 from bika.lims.utils.analysisrequest import create_analysisrequest
 from persistent.dict import PersistentDict
+from plone.uuid.interfaces import IUUIDGenerator
+from Products.Archetypes.utils import mapply
+from Products.CMFCore.permissions import ModifyPortalContent
 from senaite.fhir import logger
 from senaite.fhir.config import FHIR_STORAGE_KEY
 from senaite.fhir.config import SYSTEM_CODES
@@ -17,11 +19,11 @@ from senaite.fhir.interfaces import IFHIRContent
 from senaite.fhir.interfaces import IFHIRResource
 from senaite.fhir.interfaces import IFHIRToContent
 from zope.annotation.interfaces import IAnnotations
+from zope.component import getUtility
 from zope.component import queryAdapter
 from zope.event import notify
 from zope.interface import alsoProvides
 from zope.lifecycleevent import ObjectModifiedEvent
-from Products.CMFCore.permissions import ModifyPortalContent
 
 _marker = object()
 
@@ -252,9 +254,7 @@ def create(resource):
         raise ValueError("Counterpart object already exists: %r" % resource)
 
     # get the content dict
-    data = to_content_dict(resource, default=None)
-    if not data:
-        return None
+    data = to_content_dict(resource)
 
     # create the object
     portal_type = data.pop("portal_type")
@@ -331,3 +331,10 @@ def get_system_code(resource_type, default=_marker):
     if default is _marker:
         raise ValueError("No system code defined for %s" % resource_type)
     return default
+
+
+def generate_UUID():
+    """Generates a new UUID object
+    """
+    generator = getUtility(IUUIDGenerator)
+    return generator()

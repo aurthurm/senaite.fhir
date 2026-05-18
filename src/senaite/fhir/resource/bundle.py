@@ -10,6 +10,20 @@ from zope.interface import implementer
 
 @implementer(IBundleResource)
 class Bundle(FHIRResource):
+    """A container for a collection of resources.
+    https://hl7.org/fhir/R5/bundle-definitions.html#Bundle
+    """
+
+    __cardinality = (
+        ("identifier", "0..1"),
+        ("type", "1"),
+        ("timestamp", "0..1"),
+        ("total", "0..1"),
+        ("link", "0..*"),
+        ("entry", "0..*"),
+        ("signature", "0..1"),
+        ("issues", "0..1"),
+    )
 
     @property
     def identifier(self):

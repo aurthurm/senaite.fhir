@@ -7,19 +7,36 @@ from zope.interface import implementer
 
 
 @implementer(IServiceRequestBundleResource)
-class ServiceRequestBundleResource(Bundle):
-    """A transaction Bundle used to submit a laboratory service request.
-    https://fhir.senaite.org/StructureDefinition-SenaiteRequestBundle.html
+class BundleResponseResource(Bundle):
+    """The transaction-response Bundle returned by the server after
+    successfully processing a SenaiteRequestBundle. One entry is returned per
+    entry in the request, in the same order. Each entry carries the
+    server-assigned fullUrl and a response status. No resource body or request
+    element is included.
+    https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html
     """
 
+    __cardinality = (
+        ("id", "1..1"),
+        ("identifier", "0..1"),
+        ("total", "0..0"),
+        ("type", "1..1"),
+        ("timestamp", "0..1"),
+        ("total", "0..0"),
+        ("link", "0..0"),
+        ("entry", "1..*"),
+        ("signature", "0..0"),
+        ("issues", "0..1"),
+    )
+
     __fixed_values = (
-        ("type", "transaction")
+        ("type", "transaction-response"),
     )
 
     @property
     def id(self):
         """Returns the logical id of the artifact
-        https://fhir.senaite.org/StructureDefinition-SenaiteRequestBundle-definitions.html#key_Bundle.id
+        https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#key_Bundle.id
         """
         return self["id"]
 
@@ -33,7 +50,7 @@ class ServiceRequestBundleResource(Bundle):
     @property
     def type(self):
         """Indicates the purpose of this bundle, how it is intended to be used.
-        Fixed Value: transaction
+        Fixed Value: transaction-response
                      https://hl7.org/fhir/valueset-bundle-type.html
         https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#key_Bundle.type
         """
@@ -43,7 +60,7 @@ class ServiceRequestBundleResource(Bundle):
     def issues(self):
         """Captures issues and warnings that relate to the construction of the
         Bundle and the content within it.
-        https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#key_Bundle.issues
+        https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#Bundle.issues
         """
         records = self.get("issues") or []
         return [OperationOutcome(record) for record in records]
@@ -52,15 +69,6 @@ class ServiceRequestBundleResource(Bundle):
     def entry(self):
         """An entry in a bundle resource - will either contain a resource or
         information about a resource (transactions and history only).
-        https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#key_Bundle.entry
+        https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse-definitions.html#Bundle.entry
         """
-        resources = super(ServiceRequestBundleResource, self).entry
-        # TODO Sorting of entries inside a ServiceRequestBundle is not neat
-        # sort the entries so they are processed in the right order
-        order = ["Organization", "Practitioner", "Specimen", "Patient",
-                 "ServiceRequest"]
-        return sorted(
-            resources,
-            key=lambda en: order.index(en.resourceType)
-            if en.resourceType in order else len(order)
-        )
+        return super(BundleResponseResource, self).entry

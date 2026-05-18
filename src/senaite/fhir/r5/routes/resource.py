@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 
+from bika.lims import api
+from senaite.core.api import dtime
 from senaite.fhir import api as fapi
+from senaite.fhir.converter import to_fhir_profile_url
 from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.r5 import add_route
-from senaite.jsonapi import api
+from senaite.fhir.resource.bundleresponse import BundleResponseResource
+from senaite.jsonapi import api as japi
 from senaite.jsonapi import request as req
 
 ENDPOINT = "senaite.fhir.r5"
@@ -32,13 +36,13 @@ def get(context, request, resource_type=None, uid=None):
         return fapi.to_fhir_resource(uid)
 
     # all resources from the defined type
-    portal_type = api.resource_to_portal_type(resource_type)
+    portal_type = japi.resource_to_portal_type(resource_type)
     if portal_type is None:
         fapi.fail(msg="Not Found", status=404)
 
     # TODO Return a FHIR batch of resources?
-    return api.get_batched(portal_type=portal_type, uid=uid,
-                           endpoint=ENDPOINT_GET)
+    return japi.get_batched(portal_type=portal_type, uid=uid,
+                            endpoint=ENDPOINT_GET)
 
 
 @add_route("/<string:resource_type>", ENDPOINT_POST, methods=["POST"])
@@ -49,16 +53,52 @@ def post(context, request, resource_type=None):
     # get the FHIR resources from the request
     resources = get_fhir_resources()
 
-    objects = []
+    entries = []
     for resource in resources:
-        if fapi.can_create_or_update(resource):
-            # create or update the counterpart object
-            obj = fapi.create_or_update(resource)
-            objects.append(obj)
 
-    # TODO Create and Return a Bundle Response
-    # https://fhir.senaite.org/StructureDefinition-SenaiteBundleResponse.html
-    return {}
+        # Skip if creation or update of this resource is not supported
+        if not fapi.can_create_or_update(resource):
+            continue
+
+        # create or update the counterpart object
+        import pdb;pdb.set_trace()
+        obj = fapi.get_object(resource, default=None)
+        try:
+            if not obj:
+                obj = fapi.create(resource)
+                status = "201 Created"
+            else:
+                obj = fapi.update(resource)
+                status = "201 Updated"
+        except Exception as e:
+            status = "500 %s" % str(e)
+
+        # build the response entry
+        fullUrl = "%s/%s" % (resource.resourceType, resource.id)
+        modified = api.get_modification_date(obj)
+        modified = dtime.to_iso_format(modified)
+
+        # set up the basics of the response entry for this item
+        entry = {
+            "fullUrl": fullUrl,
+            "response": {
+                "status": status,
+                "lastModified": modified,
+            }
+        }
+        entries.append(entry)
+
+    # create the BundleResponse
+    resp = {
+        "resourceType": "Bundle",
+        "id": str(fapi.generate_UUID()),
+        "meta": {
+            "profile": [to_fhir_profile_url("SenaiteBundleResponse")]
+        },
+        "type": "transaction-response",
+        "entry": entries,
+    }
+    return BundleResponseResource(resp)
 
 
 def get_fhir_resources():

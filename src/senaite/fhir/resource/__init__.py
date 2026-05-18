@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
+import sys
 
 from senaite.core.api import dtime
 from senaite.fhir.converter import first_by
@@ -14,6 +15,15 @@ _marker = object()
 
 @implementer(IFHIRResource)
 class FHIRResource(dict):
+
+    __cardinality = (
+        ("id", "0..1"),
+        ("meta", "0..1"),
+        ("implicitRules", "0..1"),
+        ("language", "0..1"),
+    )
+
+    __fixed_values = tuple()
 
     def __init__(self, seq=None, **kwargs):
         super(FHIRResource, self).__init__(seq, **kwargs)
@@ -104,10 +114,37 @@ class FHIRResource(dict):
         """Looks through all properties and validates any constraint
         """
         # TODO Implement (loop through attr and use decorators for constraints)
-        pass
+
+        # Validate fixed values
+        for name, value in self.__fixed_values:
+            val = getattr(self, name, value)
+            if val != value:
+                raise ValueError(
+                    "%r: No valid value for '%s': %r" %
+                    (self, name, val)
+                )
+            self[name] = value
+
+        # Validate cardinality
+        for name, exp in self.__cardinality:
+            # get the low and high valies
+            low, high = exp.strip().split("..")
+            low = int(low)
+            high = sys.maxsize if high == "*" else int(high)
+            # get the value of each attr and check if in-range
+            val = getattr(self, name, [])
+            if not isinstance(val, (list, tuple)):
+                val = list(filter(None, [val]))
+            card = len(val)
+            if card < low or card > high:
+                raise ValueError(
+                    "%r: No valid cardinality for '%s': %s (expected: %s)" %
+                    (self, name, card, exp)
+                )
 
     def __str__(self):
-        return "<%s %s>" % (self.__class__.__name__, self.id or "--no-id--")
+        id = self.get("id") or "--no-id--"
+        return "<%s %s>" % (self.__class__.__name__, id)
 
     def __repr__(self):
         return self.__str__()
