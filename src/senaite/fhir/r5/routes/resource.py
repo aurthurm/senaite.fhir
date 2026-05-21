@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import transaction
+
 from bika.lims import api
 from senaite.core.api import dtime
 from senaite.fhir import api as fapi
@@ -54,6 +56,7 @@ def post(context, request, resource_type=None):
     resources = get_fhir_resources()
 
     entries = []
+    errored = False
     for resource in resources:
 
         # Skip if creation or update of this resource is not supported
@@ -62,15 +65,21 @@ def post(context, request, resource_type=None):
 
         # create or update the counterpart object
         obj = fapi.get_object(resource, default=None)
-        try:
-            if not obj:
-                obj = fapi.create(resource)
-                status = "201 Created"
-            else:
-                obj = fapi.update(resource)
-                status = "201 Updated"
-        except Exception as e:
-            status = "500 %s" % str(e)
+        if not errored:
+            try:
+                if not obj:
+                    obj = fapi.create(resource)
+                    status = "201 Created"
+                else:
+                    obj = fapi.update(resource)
+                    status = "201 Updated"
+            except Exception as e:
+                errored = True
+                status = "500 %s" % str(e)
+                # prevent partial commits
+                transaction.abort()
+        else:
+            status = "500 Skipped due to a previous error"
 
         # build the response entry
         fullUrl = "%s/%s" % (resource.resourceType, resource.id)
