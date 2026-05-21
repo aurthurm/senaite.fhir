@@ -74,10 +74,8 @@ def post(context, request, resource_type=None):
 
         # build the response entry
         fullUrl = "%s/%s" % (resource.resourceType, resource.id)
-        modified = ""
-        if obj:
-            modified = api.get_modification_date(obj)
-            modified = dtime.to_iso_format(modified)
+        modified = api.get_modification_date(obj) if obj else dtime.now()
+        modified = dtime.to_iso_format(modified)
 
         # set up the basics of the response entry for this item
         entry = {
