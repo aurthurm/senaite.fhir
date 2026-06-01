@@ -14,6 +14,7 @@ from senaite.fhir import logger
 from senaite.fhir.config import FHIR_STORAGE_KEY
 from senaite.fhir.config import SYSTEM_CODES
 from senaite.fhir.exceptions import FHIRAPIError
+from senaite.fhir.interfaces import IContentActionToFHIR
 from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.interfaces import IFHIRContent
 from senaite.fhir.interfaces import IFHIRResource
@@ -108,6 +109,13 @@ def get_object(thing, default=_marker):
     return api.get_object(thing, default=default)
 
 
+def get_available_reasons():
+    """Returns available rejection reasons
+    """
+    setup = api.get_senaite_setup()
+    return setup.getRejectionReasons()
+
+
 def to_fhir_resource(thing, default=_marker):
     """Converts the object to a FHIR resource
     """
@@ -147,6 +155,19 @@ def to_fhir_resource(thing, default=_marker):
             fail(msg="Type is not supported: %r" % obj)
         return default
 
+    return adapter.to_fhir_resource()
+
+
+def to_fhir_action_resource(thing, fhir_action, default=_marker):
+    """Converts the object action/transition to a FHIR resource
+    """
+    obj = api.get_object(thing)
+    name = "senaite.fhir.action.%s" % fhir_action
+    adapter = queryAdapter(obj, IContentActionToFHIR, name=name)
+    if not adapter:
+        if default is _marker:
+            fail(msg="Action is not supported: %s for %r" % (fhir_action, obj))
+        return default
     return adapter.to_fhir_resource()
 
 
@@ -337,4 +358,4 @@ def generate_UUID():
     """Generates a new UUID object
     """
     generator = getUtility(IUUIDGenerator)
-    return generator()
+    return get_uuid(generator())

@@ -3,18 +3,28 @@
 import transaction
 
 from bika.lims import api
+from bika.lims.interfaces import IAnalysisRequest
+from bika.lims.workflow import doActionFor as do_action_for
 from senaite.core.api import dtime
+from senaite.core.api import workflow as wapi
 from senaite.fhir import api as fapi
 from senaite.fhir.converter import to_fhir_profile_url
 from senaite.fhir.interfaces import IBundleResource
 from senaite.fhir.r5 import add_route
 from senaite.fhir.resource.bundleresponse import BundleResponseResource
+from senaite.fhir.resource.servicerequestrevoked import ServiceRequestRevocationError  # noqa: E501
+from senaite.fhir.resource.servicerequestrevoked import ServiceRequestRevocationResource  # noqa: E501
 from senaite.jsonapi import api as japi
 from senaite.jsonapi import request as req
 
 ENDPOINT = "senaite.fhir.r5"
 ENDPOINT_GET = "%s.get" % ENDPOINT
 ENDPOINT_POST = "%s.post" % ENDPOINT
+ENDPOINT_REVOKE = "%s.revoke" % ENDPOINT
+
+RESOURCE_TYPE_TO_CONTENT = (
+    ("ServiceRequest", IAnalysisRequest),
+)
 
 
 # /<resource_type>
@@ -110,6 +120,97 @@ def post(context, request, resource_type=None):
         "entry": entries,
     }
     return BundleResponseResource(resp)
+
+
+@add_route("/<string:resource_type>/<string(length=32):uid>/$revoke",
+           ENDPOINT_REVOKE, methods=["POST"])
+@add_route("/<string:resource_type>/<string(length=36):uid>/$revoke",
+           ENDPOINT_REVOKE, methods=["POST"])
+def revoke(context, request, resource_type, uid):
+    # disable CSRF
+    req.disable_csrf_protection()
+
+    # ensure there is a counterpart object registered for the given uid
+    uid = fapi.get_uuid(uid).hex
+    obj = api.get_object_by_uid(uid, default=None)
+    if not obj:
+        fapi.fail("Object not found", status=404)
+
+    # ensure the object found is from the expected type
+    implementer = dict(RESOURCE_TYPE_TO_CONTENT).get(resource_type)
+    if not implementer:
+        fapi.fail("Resource type '%s' is not supported" % resource_type)
+    if not implementer.providedBy(obj):
+        fapi.fail("Unexpected content type: %s" % api.get_portal_type(obj),
+                  status=406)
+
+    # get the FHIR resource that represents the revocation
+    resources = get_fhir_resources()
+    if not resources:
+        fapi.fail("No revocation resource found for '%s'" % resource_type)
+    if len(resources) > 1:
+        fapi.fail("Revoke with multiple entries is not supported")
+
+    resource = resources[0]
+    if not isinstance(resource, ServiceRequestRevocationResource):
+        fapi.fail("Not a ServiceRevocationResource")
+
+    # get the reason(s) for rejection/cancellation
+    reject_reason = resource.rejection_reason
+    reject_allowed = wapi.is_transition_allowed(obj, "reject")
+    cancel_allowed = wapi.is_transition_allowed(obj, "cancel")
+
+    if not any([reject_allowed, cancel_allowed]):
+        # return a ServiceRequestRevocationError
+        request.response.setStatus(403)
+        issue = {
+            "severity": "error",
+            "code": "forbidden",
+            "details": {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",  # noqa: E501
+                    "code": "MSG_LOCAL_FAIL",
+                }],
+                "text": "Revoke is not allowed for this resource",
+            },
+            "expression": ["%s.status" % resource_type],
+        }
+        return ServiceRequestRevocationError({"issue": [issue]})
+
+    if reject_allowed and not cancel_allowed:
+        transition = "reject"
+    elif cancel_allowed and not reject_allowed:
+        transition = "cancel"
+    else:
+        # TODO: This is ambiguous when both/neither transitions are allowed;
+        # confirm the intended behavior with product/functional owners
+        transition = "reject" if reject_reason else "cancel"
+
+    if reject_reason:
+        obj.setRejectionReasons(reject_reason)
+
+    success, message = do_action_for(obj, transition)
+    if not success:
+        # prevent partial commits (e.g. reason was set before transition)
+        transaction.abort()
+        # return a ServiceRequestRevocationError
+        request.response.setStatus(403)
+        issue = {
+            "severity": "error",
+            "code": "forbidden",
+            "details": {
+                "coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",  # noqa: E501
+                    "code": "MSG_LOCAL_FAIL",
+                }],
+                "text": message,
+            },
+            "expression": ["%s.status" % resource_type],
+        }
+        return ServiceRequestRevocationError({"issue": [issue]})
+
+    resource = fapi.to_fhir_action_resource(obj, "revoke")
+    return resource
 
 
 def get_fhir_resources():

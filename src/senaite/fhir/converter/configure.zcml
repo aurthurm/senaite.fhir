@@ -4,6 +4,12 @@
   <adapter for="senaite.patient.interfaces.IPatient"
            factory=".patient.PatientToResource"/>
 
+  <!-- AnalysisRequest revoke transition to FHIR -->
+  <adapter name="senaite.fhir.action.revoke"
+           factory=".analysisrequest.AnalysisRequestRevokedToResource"
+           for="bika.lims.interfaces.IAnalysisRequest"
+           provides="senaite.fhir.interfaces.IContentActionToFHIR"/>
+
   <!-- FHIR To Patient -->
   <adapter for="senaite.fhir.interfaces.IPatientResource"
            factory=".patient.ResourceToPatient"/>

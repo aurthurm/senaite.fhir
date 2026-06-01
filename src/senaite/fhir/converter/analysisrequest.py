@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
+from senaite.core.api import dtime
+from bika.lims.interfaces import IAnalysisRequest
 from senaite.fhir.converter import first_by
+from senaite.fhir.converter import to_fhir_profile_url
+from senaite.fhir.interfaces import IContentActionToFHIR
 from senaite.fhir.interfaces import IFHIRToContent
 from senaite.fhir.interfaces import IServiceRequestResource
+from senaite.fhir.resource.servicerequestrevoked import ServiceRequestRevokedResource  # noqa: E501
 from zope.component import adapter
 from zope.interface import implementer
 from bika.lims import api
@@ -18,6 +23,42 @@ PRIORITIES = (
     ("urgent", "3"),
     ("routine", "5"),
 )
+
+
+@adapter(IAnalysisRequest)
+@implementer(IContentActionToFHIR)
+class AnalysisRequestRevokedToResource(object):
+
+    def __init__(self, context):
+        self.context = context
+
+    def to_fhir_resource(self):
+        data = {}
+        if fapi.is_fhir_content(self.context):
+            data = fapi.get_fhir_storage(self.context).get("data")
+
+        modified = api.get_modification_date(self.context)
+        modified = dtime.to_localized_time(modified, long_format=True)
+        profile_url = to_fhir_profile_url("SenaiteServiceRequestRevoked")
+        data["resourceType"] = "ServiceRequest"
+        data["id"] = str(fapi.get_uuid(self.context))
+        data["status"] = "revoked"
+        data["meta"] = {
+            "profile": [profile_url],
+            "versionId": api.get_version(self.context),
+            "lastUpdated": modified,
+        }
+        # get the selected predefined reasons
+        reasons = list(self.context.getSelectedRejectionReasons())
+        # append custom/other reasons
+        reasons.append(self.context.getOtherRejectionReasons())
+        # remove empties/Nones
+        reasons = list(filter(None, reasons))
+        reasons = "; ".join(reasons)
+        if reasons:
+            data["note"] = [{"text": reasons}]
+
+        return ServiceRequestRevokedResource(data)
 
 
 @adapter(IServiceRequestResource)
