@@ -3,11 +3,11 @@
 import base64
 
 from bika.lims import api
-from senaite.core.api import dtime
 from senaite.core.interfaces import IResultsReport
 from senaite.fhir import api as fapi
 from senaite.fhir.config import DIAGNOSTIC_REPORT_STATUSES
 from senaite.fhir.converter import to_fhir_identifier as to_fhir_id
+from senaite.fhir.converter import to_fhir_datetime
 from senaite.fhir.converter import to_fhir_profile_url
 from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.resource.diagnosticreport import DiagnosticReportResource
@@ -59,7 +59,7 @@ class ResultsReportToResource(object):
     def get_last_updated(self):
         sample = self.get_sample()
         modified = api.get_modification_date(sample)
-        return dtime.to_localized_time(modified, long_format=True)
+        return to_fhir_datetime(modified)
 
     def get_status(self):
         sample = self.get_sample()
