@@ -17,16 +17,16 @@ SERVICE_REQUEST_STATUSES = (
     # FHIR ValueSet: draft | active | on-hold | revoked | completed |
     #                entered-in-error | unknown
     # https://hl7.org/fhir/R5/valueset-request-status.html
-    ("sample_received", "preliminary"),
-    ("to_be_verified", "preliminary"),
-    ("published", "final"),
+    ("sample_received", "active"),
+    ("to_be_verified", "active"),
+    ("published", "completed"),
     ("invalid", "entered-in-error"),
-    ("rejected", "cancelled"),
-    ("cancelled", "cancelled"),
+    ("rejected", "revoked"),
+    ("cancelled", "revoked"),
     ("retracted", "entered-in-error"),
-    ("dispatched", "final"),
+    ("dispatched", "completed"),
     # Default status if no match
-    (None, )
+    (None, "active")
 )
 
 DIAGNOSTIC_REPORT_STATUSES = (
