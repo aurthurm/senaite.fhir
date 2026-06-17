@@ -182,7 +182,7 @@ def get_object(thing, default=_marker):
 
     if default is _marker:
         return api.get_object(thing)
-    return default
+    return api.get_object(thing, default=default)
 
 
 def get_available_reasons():
