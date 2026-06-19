@@ -131,32 +131,13 @@ class ResourceToAnalysisRequest(object):
     def get_sample_type(self):
         """Returns the SampleType object associated to this ServiceRequest
         """
-        # Try with the reference UID first
-        ref = self.get_reference("specimen")
-        uid = ref.UID()
-        obj = fapi.get_object(uid, default=None)
+        ref = self.resource.specimen[0]
+        sibling = self.get_bundle_sibling(ref)
+        obj = fapi.find_object_for(sibling)
         if obj:
             return obj
-
-        # get the sibling from the bundle, if any
-        sibling = self.get_bundle_sibling(ref)
-        if not sibling:
-            raise ValueError("%r: No SampleType for specimen: %s" %
-                             (self.resource, uid))
-
-        # search by code / title
-        # TODO Consider to add a search function in fapi and use adapters
-        # TODO Add a field to SampleType (SNOMED code) to search by code
-        code = sibling.get_code()
-        display = code.display.lower()
-        # use sortable_title for an ignore case search
-        query = dict(portal_type="SampleType", sortable_title=display.lower())
-        brains = api.search(query, SETUP_CATALOG)
-        if len(brains) == 1:
-            return api.get_object(brains[0])
-
-        raise ValueError("%r: No SampleType for specimen: %s" %
-                         (self.resource, uid))
+        raise ValueError("%r: No SampleType for specimen: %r" %
+                         (self.resource, sibling))
 
     @memoize
     def get_requester(self):
@@ -208,47 +189,23 @@ class ResourceToAnalysisRequest(object):
     def get_patient(self):
         """Returns the patient assigned to this ServiceRequest
         """
-        # Try with the reference UID first
-        ref = self.get_reference("subject")
-        uid = ref.UID()
-        obj = fapi.get_object(uid, default=None)
+        ref = self.resource.subject
+        sibling = self.get_bundle_sibling(ref)
+        obj = fapi.find_object_for(sibling)
         if obj:
             return obj
-
-        raise ValueError("%r: No Patient for %s" % (self.resource, uid))
+        raise ValueError("%r: No Patient for %r" % (self.resource, sibling))
 
     @memoize
     def get_client(self):
         """Returns the client the sample where the sample has to be created
         """
-        # try with the reference first
         ref = self.resource.client
-        uid = ref.UID()
-        obj = fapi.get_object(uid, default=None)
+        sibling = self.get_bundle_sibling(ref)
+        obj = fapi.find_object_for(sibling)
         if obj:
             return obj
-
-        # get the sibling from the bundle, if any
-        sibling = self.get_bundle_sibling(ref)
-        if not sibling:
-            raise ValueError("%r: No Client for %s" % (self.resource, uid))
-
-        # TODO Consider to add a search function in fapi and use adapters
-        # search by client ID (use=secondary)
-        client_id = sibling.get_external_id()
-        if client_id:
-            query = dict(portal_type="Client", getClientID=client_id)
-            brains = api.search(query, SETUP_CATALOG)
-            if len(brains) == 1:
-                return api.get_object(brains[0])
-
-        # fallback to search by title (ignorecase)
-        query = dict(portal_type="Client", sortable_title=sibling.name)
-        brains = api.search(query, SETUP_CATALOG)
-        if len(brains) == 1:
-            return api.get_object(brains[0])
-
-        raise ValueError("%r: No Client for %s" % (self.resource, uid))
+        raise ValueError("%r: No Client for %r" % (self.resource, sibling))
 
     @memoize
     def get_specifications(self):
@@ -354,34 +311,45 @@ class ResourceToAnalysisRequest(object):
 
     @memoize
     def get_profile(self):
-        """Returns an analysis profile
+        """Returns an analysis profile, or None when the ServiceRequest does
+        not reference a panel we can resolve. The panel (``code.concept``) and
+        its codings/text are all optional, so each is guarded against None.
         """
-        panel = self.resource.code.concept
+        code = getattr(self.resource, "code", None)
+        panel = code.concept if code else None
+        if not panel:
+            return None
+
         system = fapi.get_system_code("AnalysisProfile")
-        coding = first_by(panel.coding, system=system)
+        coding = None
+        if panel.coding:
+            coding = first_by(panel.coding, system=system)
 
         # search by profile_key
-        query = dict(portal_type="AnalysisProfile", profile_key=coding.code)
-        brains = api.search(query, SETUP_CATALOG)
-        if len(brains) == 1:
-            return api.get_object(brains[0])
+        if coding and coding.code:
+            query = dict(portal_type="AnalysisProfile",
+                         profile_key=coding.code)
+            brains = api.search(query, SETUP_CATALOG)
+            if len(brains) == 1:
+                return api.get_object(brains[0])
 
         # search by title (from concept.coding.display)
-        display = coding.display
+        display = coding.display if coding else None
         if display:
             # use sortable_title for an ignore case search
-            title = display.lower()
-            query = dict(portal_type="AnalysisProfile", sortable_title=title)
+            query = dict(portal_type="AnalysisProfile",
+                         sortable_title=display.lower())
             brains = api.search(query, SETUP_CATALOG)
             if len(brains) == 1:
                 return api.get_object(brains[0])
 
         # search by title (from concept.text)
-        title = panel.text.lower()
-        query = dict(portal_type="AnalysisProfile", sortable_title=title)
-        brains = api.search(query, SETUP_CATALOG)
-        if len(brains) == 1:
-            return api.get_object(brains[0])
+        if panel.text:
+            query = dict(portal_type="AnalysisProfile",
+                         sortable_title=panel.text.lower())
+            brains = api.search(query, SETUP_CATALOG)
+            if len(brains) == 1:
+                return api.get_object(brains[0])
 
         return None
 

@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
+import json
 import re
 from uuid import UUID
 
 from bika.lims import api
+from bika.lims.api import _marker  # noqa
 from bika.lims.api.security import check_permission
 from bika.lims.interfaces import IInternalUse
 from bika.lims.utils.analysisrequest import create_analysisrequest
@@ -12,12 +14,14 @@ from plone.uuid.interfaces import IUUIDGenerator
 from Products.Archetypes.utils import mapply
 from Products.CMFCore.permissions import ModifyPortalContent
 from senaite.fhir import logger
+from senaite.fhir.catalog import FHIR_CATALOG
 from senaite.fhir.config import ANALYSIS_REPORTABLE_STATUSES
 from senaite.fhir.config import FHIR_RESOURCE_TO_PORTAL_TYPE
 from senaite.fhir.config import FHIR_STORAGE_KEY
 from senaite.fhir.config import SYSTEM_CODES
 from senaite.fhir.exceptions import FHIRAPIError
 from senaite.fhir.interfaces import IContentActionToFHIR
+from senaite.fhir.interfaces import IContentFinder
 from senaite.fhir.interfaces import IContentToFHIR
 from senaite.fhir.interfaces import IFHIRContent
 from senaite.fhir.interfaces import IFHIRResource
@@ -25,15 +29,15 @@ from senaite.fhir.interfaces import IFHIRToContent
 from zope.annotation.interfaces import IAnnotations
 from zope.component import getUtility
 from zope.component import queryAdapter
-from zope.event import notify
 from zope.interface import alsoProvides
-from zope.lifecycleevent import ObjectModifiedEvent
-
-_marker = object()
 
 
 def fail(msg, status=500):
-    """API Error
+    """Raises a ``FHIRAPIError`` carrying the given message and HTTP status.
+
+    :param msg: the error message (a default is used when ``None``)
+    :param status: the HTTP status code to attach (500 by default)
+    :raises FHIRAPIError: always
     """
     if msg is None:
         msg = "Reason not given."
@@ -104,85 +108,336 @@ def get_uid(obj):
     return api.get_uid(obj)
 
 
-def get_fhir_uid(obj):
-    """Returns the UID of the counterpart FHIR content, if any
+def get_resource_type(obj):
+    """Returns the FHIR resource type associated to the given object.
+
+    If a FHIR resource is passed in, its own ``resourceType`` is returned.
+    For a SENAITE content object (or a brain/UID resolving to one), the
+    resource type is resolved by reverse-looking-up the object's portal type
+    in ``FHIR_RESOURCE_TO_PORTAL_TYPE`` (which maps resource type -> portal
+    type), falling back to the portal type itself when no mapping is defined.
+
+    When several resource types map to the same portal type, the first one in
+    alphabetical order is returned for determinism.
+
+    :param obj: FHIR resource, content object, catalog brain or UID
+    :returns: the FHIR resource type, e.g. ``"Patient"``
+    :rtype: str
     """
     if is_fhir_resource(obj):
-        return get_uid(obj)
+        return obj.resourceType
+
+    # reverse-lookup the resource type for the object's portal type
+    if api.is_string(obj) and not is_uuid(obj):
+        portal_type = obj
+    else:
+        obj = api.get_object(obj)
+        portal_type = api.get_portal_type(obj)
+
+    # looks for the first match
+    mapping = sorted(FHIR_RESOURCE_TO_PORTAL_TYPE)
+    for resource_type, mapped_portal_type in mapping:
+        if mapped_portal_type == portal_type:
+            return resource_type
+
+    # fall back to the portal type itself when no mapping is defined
+    return portal_type
+
+
+def get_portal_type(obj):
+    """Returns the SENAITE portal type associated to the given object.
+
+    This is the inverse of ``get_resource_type``. If a FHIR resource is passed
+    in, the portal type is looked up from its ``resourceType`` through
+    ``FHIR_RESOURCE_TO_PORTAL_TYPE`` (which maps resource type -> portal type),
+    falling back to the resource type itself when no mapping is defined. For a
+    content object (or a brain/UID resolving to one), its portal type is
+    returned.
+
+    :param obj: FHIR resource, content object, catalog brain or UID
+    :returns: the SENAITE portal type, e.g. ``"Patient"``
+    :rtype: str
+    """
+    if is_fhir_resource(obj):
+        # lookup the portal_type for the resource's resourceType
+        resource_type = obj.resourceType
+        mapping = dict(FHIR_RESOURCE_TO_PORTAL_TYPE)
+        return mapping.get(resource_type, resource_type)
+
+    # an object, return the portal type
     obj = api.get_object(obj)
-    if is_fhir_content(obj):
-        storage = get_fhir_storage(obj)
-        return storage.get("uid", None)
-    return None
+    return api.get_portal_type(obj)
 
 
-def fhir_id_key(resource_type):
-    """Return the annotation storage key for a FHIR resource type.
+def get_fhir_uid(obj, resource_type=None):
+    """Returns the FHIR UID (hex) of the counterpart resource of the given
+    object for the given resource type.
 
-    Converts CamelCase resource type names to a snake_case storage key:
-      Patient          -> fhir_patient_id
-      DiagnosticReport -> fhir_diagnostic_report_id
-      ServiceRequest   -> fhir_service_request_id
+    When ``resource_type`` is not provided, it defaults to the resource type
+    associated to the object (see ``get_resource_type``).
+
+    If the object has no separately-linked FHIR resource for that type, this
+    falls back to the object's own SENAITE UID, so a FHIR resource derived
+    from it keeps a stable identity (see ``get_fhir_uids``). Returns ``None``
+    when the object has no UID associated to the requested resource type.
+
+    :param obj: FHIR resource, content object, catalog brain or UID
+    :param resource_type: FHIR resource type to look up, e.g. ``"Patient"``;
+        defaults to the object's own resource type
+    :returns: the FHIR UID in hex format, or ``None``
+    :rtype: str
     """
-    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", resource_type).lower()
-    return "fhir_%s_id" % snake
+    if resource_type is None:
+        resource_type = get_resource_type(obj)
+
+    # return the FHIR uid for the given object and resource type
+    uids = get_fhir_uids(obj)
+    return uids.get(resource_type)
 
 
-def get_fhir_resource_id(obj, resource_type):
-    """Returns the stored FHIR resource ID for resource_type on obj, or None.
+def get_fhir_id(obj, resource_type=None):
+    """Returns the FHIR id of the counterpart resource of the given object for
+    the given resource type, in canonical dashed UUID form.
 
-    Reads directly from the annotation without creating storage, so calling
-    this on a SENAITE-native object (no FHIR storage yet) is safe and cheap.
+    This is the string form of ``get_fhir_uid`` (which returns the UID in hex
+    format). When ``resource_type`` is not provided, it defaults to the
+    resource type associated to the object (see ``get_resource_type``).
+
+    Like ``get_fhir_uid``, it falls back to the object's own SENAITE UID when
+    no separate FHIR resource is linked for that type, and returns ``None``
+    when the object has no UID associated to the requested resource type.
+
+    :param obj: FHIR resource, content object, catalog brain or UID
+    :param resource_type: FHIR resource type to look up, e.g. ``"Patient"``;
+        defaults to the object's own resource type
+    :returns: the FHIR id in canonical dashed UUID form, or ``None``
+    :rtype: str
     """
+    uid = get_fhir_uid(obj, resource_type=resource_type)
+    return str(get_uuid(uid)) if uid else None
+
+
+def get_fhir_uids(obj):
+    """Returns the FHIR UIDs (hex) assigned to the given object, grouped by
+    resource type.
+
+    For a FHIR resource, a single-entry mapping ``{resourceType: uid}`` is
+    returned.
+
+    For a brain coming from the FHIR catalog, the precomputed mapping is read
+    directly from its ``fhir_resource_types`` metadata (no object wake-up).
+
+    For a content object (or a brain/UID resolving to one), the persisted FHIR
+    UIDs are read from the object's annotation storage (without creating it, to
+    avoid a write-on-read) and grouped by resource type. The object's own
+    SENAITE UID is then injected for both its FHIR resource type and its portal
+    type when no entry exists yet, so a resource derived from the object always
+    resolves to a stable identity.
+
+    :param obj: FHIR resource, content object, catalog brain or UID
+    :returns: mapping of resource type -> FHIR UID (hex)
+    :rtype: dict
+    """
+    if is_fhir_resource(obj):
+        # TODO Include uids of references from inside the resource maybe?
+        return {obj.resourceType: get_uid(obj)}
+
+    if api.is_brain(obj):
+        # if is a brain from fhir_catalog, rely on fhir_resources_types
+        resource_types = getattr(obj, "fhir_resource_types", None)
+        if resource_types:
+            return json.loads(resource_types)
+
+    # get object's FHIR annotations storage, but don't use get_fhir_storage to
+    # not do a write-on-read
+    obj = api.get_object(obj)
     annotation = IAnnotations(obj)
-    storage = annotation.get(FHIR_STORAGE_KEY)
-    if storage is None:
-        return None
-    return storage.get(fhir_id_key(resource_type), None)
+    storage = annotation.get(FHIR_STORAGE_KEY) or {}
+    uids = dict(storage.get("uids") or {})
+
+    # inject the uid for the counterpart FHIR resource if not present
+    resource_type = get_resource_type(obj)
+    if resource_type and resource_type not in uids:
+        uids[resource_type] = api.get_uid(obj)
+
+    # inject the object's uid if no entry for object's portal_type
+    portal_type = api.get_portal_type(obj)
+    if portal_type not in uids:
+        uids[portal_type] = api.get_uid(obj)
+
+    return uids
 
 
-def set_fhir_resource_id(obj, resource_type, fhir_id):
-    """Stores the FHIR resource ID (hex UUID) for resource_type on obj
+def set_fhir_uids(obj, **kwargs):
+    """Persists FHIR UIDs against the given object, keyed by resource type, and
+    (re)indexes it in the FHIR catalog.
+
+    Each keyword argument maps a FHIR resource type to the UID (hex) of its
+    counterpart FHIR resource, e.g. ``set_fhir_uids(sample, Specimen=uid1,
+    ServiceRequest=uid2)``. Stored entries for resource types not passed in are
+    kept; entries for the passed resource types are overwritten.
+
+    The object is then indexed in the FHIR catalog so it can be resolved back
+    via ``search_by_fhir_uid``.
+
+    :param obj: content object, catalog brain or UID
+    :param kwargs: mapping of resource type -> FHIR UID (hex)
     """
+    obj = api.get_object(obj)
     storage = get_fhir_storage(obj)
-    storage[fhir_id_key(resource_type)] = fhir_id
+    for resource_type, uid in kwargs.items():
+        storage.setdefault("uids", {})[resource_type] = uid
+
+    # index/reindex object in fhir_catalog. Use the low-level _indexObject so
+    # the object is forced into the FHIR catalog: the high-level indexObject
+    # goes through the CatalogMultiplexProcessor, which only routes to the
+    # catalogs mapped to the object's portal type (api.get_catalogs_for) and
+    # would therefore skip this catalog.
+    cat = api.get_tool(FHIR_CATALOG)
+    cat._indexObject(obj)
 
 
-def get_object_by_fhir_id(fhir_id, resource_type, portal_type):
-    """Returns the SENAITE object whose stored FHIR ID for resource_type
-    matches fhir_id, or None when not found
+def search_by_fhir_uid(fhir_uid, portal_type=None, as_brains=True):
+    """Searches the FHIR catalog for the objects holding the given FHIR UID.
+
+    Looks up the ``fhir_uids`` index of the FHIR catalog. The value is
+    harmonized to a hex UID first, so either a FHIR id (dashed) or a hex UID
+    can be passed in. Optionally constrained to a given portal type.
+
+    :param fhir_uid: FHIR UID (hex) or FHIR id (dashed UUID) to look up
+    :param portal_type: optional portal type to constrain the search
+    :param as_brains: when True (default) returns catalog brains, otherwise
+        returns the woken-up content objects
+    :returns: the matching catalog brains, or content objects when
+        ``as_brains`` is False (an empty list when nothing matches)
+    :rtype: list
     """
-    brains = api.search({"portal_type": portal_type})
+    # prevent circular imports
+    from senaite.fhir.catalog import FHIR_CATALOG  # noqa
+
+    # harmonize just in case it was a fhir_id
+    uid = get_uuid(fhir_uid).hex
+
+    # build the search query
+    query = {"fhir_uids": uid}
+    if portal_type:
+        query["portal_type"] = portal_type
+
+    # search to fhir_catalog by fhir_uids
+    fc = api.get_tool(FHIR_CATALOG)
+    brains = fc(**query)
+    if as_brains:
+        return brains
+
+    # wake-up the objects
+    return [api.get_object(brain) for brain in brains]
+
+
+def get_object_by_fhir_uid(fhir_uid, portal_type=None, default=_marker):
+    """Returns the SENAITE object holding the given FHIR UID.
+
+    Resolves through the FHIR catalog (see ``search_by_fhir_uid``). The
+    ``fhir_uid`` can be a hex UID or a dashed FHIR id, as it is harmonized
+    before searching. The lookup can be constrained to a ``portal_type``; when
+    none is given, all portal types are searched (less performant).
+
+    :param fhir_uid: FHIR UID (hex) or FHIR id (dashed UUID) to look up
+    :param portal_type: optional portal type to constrain the search
+    :param default: value to return when no object holds the UID; when omitted,
+        a ``FHIRAPIError`` is raised instead
+    :returns: the matching content object, or ``default``
+    """
+    # harmonize just in case it was a fhir_id
+    fhir_uid = get_uuid(fhir_uid).hex
+
+    # do the search
+    brains = search_by_fhir_uid(fhir_uid, portal_type=portal_type)
+
+    # resource_type must match with portal_type or with its resourceType
     for brain in brains:
-        obj = api.get_object(brain, default=None)
-        if obj and get_fhir_resource_id(obj, resource_type) == fhir_id:
-            return obj
-    return None
+        uids = get_fhir_uids(brain)
+        portal_type = get_portal_type(brain)
+        if uids.get(portal_type) == fhir_uid:
+            return api.get_object(brain)
+        resource_type = get_resource_type(portal_type)
+        if uids.get(resource_type) == fhir_uid:
+            return api.get_object(brain)
+
+    if default is _marker:
+        fail("No object found for FHIR UID {}".format(fhir_uid))
+    return default
 
 
 def get_object(thing, default=_marker):
-    resource_type = None
-    if is_fhir_resource(thing):
-        resource_type = thing.resourceType
-        thing = get_uid(thing)
+    """Resolves the given thing into a SENAITE content object.
 
-    # Fast path: direct SENAITE UID lookup
-    obj = api.get_object(thing, default=None)
-    if obj:
-        return obj
+    Resolution order:
 
-    # Fallback: search by stored FHIR resource ID when the resource type
-    # is in the migrated set (i.e. its FHIR ID no longer equals SENAITE UID)
-    if is_uuid(thing) and resource_type:
-        portal_type = FHIR_RESOURCE_TO_PORTAL_TYPE.get(resource_type)
-        if portal_type:
-            obj = get_object_by_fhir_id(thing, resource_type, portal_type)
-            if obj:
-                return obj
+    1. A content object, catalog brain or SENAITE UID is resolved through the
+       core ``bika.lims.api.get_object``.
+    2. If that misses (or a FHIR resource is passed), the counterpart object is
+       resolved through the FHIR catalog by its FHIR UID (see
+       ``get_object_by_fhir_uid``). A bare FHIR id/UID string is resolved this
+       way too, by searching across all portal types; a FHIR resource narrows
+       the search to its mapped portal type.
 
-    if default is _marker:
-        return api.get_object(thing)
-    return api.get_object(thing, default=default)
+    :param thing: FHIR resource, content object, catalog brain, SENAITE UID or
+        FHIR UID/id
+    :param default: value to return when not found; when omitted, a
+        ``FHIRAPIError`` is raised
+    :returns: the resolved content object, or ``default``
+    """
+    if not is_fhir_resource(thing):
+        # delegate to core's api
+        obj = api.get_object(thing, default=None)
+        if obj:
+            return obj
+
+    # fallback to search by FHIR UID
+    if is_uuid(thing):
+        # search without portal_type (less performant)
+        fhir_uid = get_uuid(thing).hex
+        return get_object_by_fhir_uid(fhir_uid, default=default)
+
+    # have a fhir_resource
+    fhir_uid = get_uid(thing)
+    portal_type = get_portal_type(thing)
+    return get_object_by_fhir_uid(fhir_uid, portal_type, default=default)
+
+
+def find_object_for(resource):
+    """Finds the SENAITE object that corresponds to the given FHIR resource.
+
+    Resolution happens in two steps:
+
+    1. an exact match by FHIR UID through the FHIR catalog (see
+       ``get_object``);
+    2. when that misses, the ``IContentFinder`` adapter registered for the
+       resource (if any) is asked to find a suitable counterpart by business
+       keys (e.g. ``ClientFinder`` matches a Client by its ``ClientID``).
+
+    This is used by the bundle POST endpoint to resolve existing content
+    (so it gets updated instead of duplicated) before falling back to create.
+
+    :param resource: the FHIR resource to find a counterpart for
+    :returns: the matching content object, or ``None`` when none is found
+    :raises FHIRAPIError: if ``resource`` is not a FHIR resource
+    """
+    if not is_fhir_resource(resource):
+        fail("Type is not supported: %r" % resource)
+
+    # search by fhir UID exact match first
+    match = get_object(resource, default=None)
+    if match:
+        return match
+
+    # search using a content finder adapter
+    adapter = queryAdapter(resource, IContentFinder)
+    if not adapter:
+        logger.debug("No ContentFinder adapter available: %r" % resource)
+        return None
+
+    return adapter.find()
 
 
 def get_available_reasons():
@@ -193,7 +448,25 @@ def get_available_reasons():
 
 
 def to_fhir_resource(thing, default=_marker, resource_type=None):
-    """Converts the object to a FHIR resource
+    """Converts the given thing into a FHIR resource.
+
+    Accepts several inputs:
+
+    - a FHIR resource: returned as-is;
+    - a ``dict``: dispatched to the ``IFHIRResource`` adapter named after its
+      ``resourceType``;
+    - a content object, catalog brain or UID: resolved (see ``get_object``)
+      and converted through its ``IContentToFHIR`` adapter.
+
+    Empty/falsy input returns ``None``. On any other failure (missing/
+    unsupported resource type, object not found, no adapter) a
+    ``FHIRAPIError`` is raised unless ``default`` is provided.
+
+    :param thing: FHIR resource, dict, content object, catalog brain or UID
+    :param default: value to return instead of raising on failure
+    :param resource_type: optional resource type hint used when resolving a
+        bare UID that is a FHIR id rather than a SENAITE UID
+    :returns: the FHIR resource, ``None`` for empty input, or ``default``
     """
     if not thing:
         return None
@@ -217,20 +490,14 @@ def to_fhir_resource(thing, default=_marker, resource_type=None):
 
         return resource
 
-    if api.is_uid(thing):
-        uid = thing
-        thing = api.get_object_by_uid(uid, default=None)
-        # Fallback: the UID may be a FHIR resource ID, not a SENAITE UID
-        if not thing and resource_type:
-            portal_type = FHIR_RESOURCE_TO_PORTAL_TYPE.get(resource_type)
-            if portal_type:
-                thing = get_object_by_fhir_id(uid, resource_type, portal_type)
-        if not thing:
-            if default is _marker:
-                fail(msg="Not Found", status=404)
-            return default
+    # get the object to build the FHIR Resource from
+    obj = get_object(thing, default=None)
+    if not obj:
+        if default is _marker:
+            fail(msg="Not Found", status=404)
+        return default
 
-    obj = api.get_object(thing)
+    # get the ContentToFHIR adapter
     adapter = queryAdapter(obj, IContentToFHIR)
     if not adapter:
         if default is _marker:
@@ -254,10 +521,17 @@ def to_fhir_action_resource(thing, fhir_action, default=_marker):
 
 
 def to_content_dict(resource, default=_marker):
-    """Converts the resource to a dict suitable for the creation or edition
-    of AT/DX contents their portal type suits well with the resource type.
-    Raises a ValueError if there is no IFHIRToContent adapter registered for
-    the given resource unless default is set, in which case returns default.
+    """Converts a FHIR resource into a content dict for the creation or
+    edition of the AT/DX content whose portal type matches the resource type.
+
+    The conversion is delegated to the ``IFHIRToContent`` adapter registered
+    for the resource. When no such adapter exists, a ``ValueError`` is raised
+    unless ``default`` is provided, in which case ``default`` is returned.
+
+    :param resource: the FHIR resource to convert
+    :param default: value to return instead of raising when no adapter exists
+    :returns: a dict of field name -> value (including ``portal_type`` and
+        ``parent_path``), or ``default``
     :rtype: dict
     """
     # convert the resource to a content dict
@@ -296,24 +570,20 @@ def can_create_or_update(resource):
     return True
 
 
-def create_or_update(resource):
-    """Creates a counterpart object for the given FHIR resource if it does
-    not exist yet. Updates the existing object otherwise.
+def update(obj, resource):
+    """Updates an existing object with the data carried by the FHIR resource.
+
+    The caller is expected to resolve the counterpart object first (e.g. via
+    ``get_object`` or ``find_object_for``). Each writable, permitted field
+    present in the resource's content dict is set, the resource is linked
+    (see ``link_fhir_resource``) and the object is re-cataloged.
+
+    :param obj: the existing content object to update
+    :param resource: the FHIR resource carrying the new field values
+    :returns: the updated object
     """
-    if not is_fhir_resource(resource):
-        raise ValueError("Type not supported: {}".format(repr(type(resource))))
-
-    obj = get_object(resource, default=None)
-    if not obj:
-        return create(resource)
-    return update(resource)
-
-
-def update(resource):
-    """Updates the counterpart object for the given FHIR resource
-    """
+    # convert the resource to a dict suitable for updating AT/DX contents
     data = to_content_dict(resource)
-    obj = get_object(resource)
 
     # loop through data and set field values
     fields = api.get_fields(obj)
@@ -346,11 +616,17 @@ def update(resource):
 
 
 def create(resource):
-    """Creates a counterpart object for the given FHIR Resource
-    """
-    # get the uid
-    uid = get_uid(resource)
+    """Creates a counterpart SENAITE object for the given FHIR resource.
 
+    The resource is converted to a content dict (see ``to_content_dict``) and
+    the object is created under the ``parent_path`` it resolves to
+    (AnalysisRequest samples are created through ``create_analysisrequest``).
+    The resource is then linked to the new object via ``link_fhir_resource``.
+
+    :param resource: the FHIR resource to create a counterpart for
+    :returns: the newly created content object
+    :raises ValueError: if a counterpart object already exists
+    """
     # check if already exists
     obj = get_object(resource, default=None)
     if obj:
@@ -372,53 +648,60 @@ def create(resource):
     else:
         obj = api.create(container, portal_type, **data)
 
-    # un-catalog the object
-    api.uncatalog_object(obj)
-
-    # set the uid of the FHIR resource
-    if resource.resourceType in FHIR_RESOURCE_TO_PORTAL_TYPE:
-        set_fhir_resource_id(obj, resource.resourceType, uid)
-    else:
-        if api.is_dexterity_content(obj):
-            setattr(obj, "_plone.uuid", uid)
-        elif api.is_at_content(obj):
-            setattr(obj, "_at_uid", uid)
-
     # link the FHIR resource to the obj
     link_fhir_resource(obj, resource)
-
-    # re-catalog the object
-    api.catalog_object(obj)
-
-    # TODO Consider to apply this to senaite.core's api.catalog_object
-    # api.catalog_object only re-adds AT content to uid_catalog; for DX
-    # content we rely on plone.app.referenceablebehavior, which re-indexes
-    # the object in uid_catalog on ObjectModifiedEvent. Without this, the
-    # patched UID is invisible to api.get_object_by_uid afterwards.
-    if api.is_dexterity_content(obj):
-        notify(ObjectModifiedEvent(obj))
 
     return obj
 
 
 def link_fhir_resource(obj, resource):
-    """Assigns a FHIR resource to the given obj
+    """Links a FHIR resource to the given SENAITE object.
+
+    Marks the object with ``IFHIRContent`` and records the resource's UID in
+    the object's ``uids`` mapping (keyed by resource type, via
+    ``set_fhir_uids``, which also indexes it in the FHIR catalog). The
+    serialized resource is also stored under ``data`` for offline use.
+
+    :param obj: the content object to link the resource to
+    :param resource: the FHIR resource to link
+    :raises ValueError: if ``resource`` is not a FHIR resource
     """
     if not is_fhir_resource(resource):
         raise ValueError("Type not supported: {}".format(repr(type(resource))))
 
     # mark the object with IFHIRContent, so we can always know beforehand if
-    # this object has a counterpart FHIR resource
-    alsoProvides(obj, IFHIRContent)
+    # this object has counterpart FHIR resources
+    if not IFHIRContent.providedBy(obj):
+        alsoProvides(obj, IFHIRContent)
 
+    # get the uid and resourceType
+    resource_uid = get_uid(resource)
+    resource_type = resource.resourceType
+
+    # link the resource's UID to the given object
+    kwargs = {resource_type: resource_uid}
+    set_fhir_uids(obj, **kwargs)
+
+    # TODO Remove (kept for backwards compatibility)
     # assign the FHIR UID, along with current data so we can always use the
     # original information, even when connection with source is lost
     annotation = get_fhir_storage(obj)
-    annotation["uid"] = get_uid(resource)
     annotation["data"] = resource.to_dict()
 
 
 def slugify(value, repl="-"):
+    """Slugifies the given value.
+
+    Lowercases the input, strips non-word characters and collapses runs of
+    whitespace, underscores and hyphens into a single separator, trimming
+    leading/trailing separators.
+
+    :param value: the string to slugify
+    :param repl: separator to collapse runs into (``-`` by default; pass an
+        empty string to remove separators altogether)
+    :returns: the slugified string
+    :rtype: str
+    """
     repl = repl if repl else ""
     slug = value.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)

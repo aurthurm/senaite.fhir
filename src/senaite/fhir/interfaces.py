@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-
-
+from senaite.core.interfaces import ISenaiteCatalogObject
 from senaite.patient import ISenaitePatientLayer
 from zope.interface import Interface
 
@@ -126,6 +125,21 @@ class IFHIRToContent(Interface):
         """
 
 
+class IContentFinder(Interface):
+    """Adapter in charge of searching the suitable content for the given
+    resource
+    """
+
+    def find(self):
+        """Returns the object that matches with the given resource or None
+        """
+
+
 class IFHIRContent(Interface):
     """Marker interface for objects that has a linked FHIR Resource
+    """
+
+
+class IFHIRCatalog(ISenaiteCatalogObject):
+    """Marker interface for Senaite FHIR catalog
     """
