@@ -335,12 +335,12 @@ class ResourceToAnalysisRequest(object):
         profile = self.get_profile()
         if profile:
             missing = set(profile.getServices()) - set(services)
-            if  missing:
+            if missing:
                 # build the message
                 tests = ["%s %s" % (
-                    api.safe_unicode(service.getProtocolID()),
-                    api.safe_unicode(api.get_title(service))
-                ) for service in missing]
+                    api.safe_unicode(test.getProtocolID()),
+                    api.safe_unicode(api.get_title(test))
+                ) for test in missing]
                 msg = ("orderDetail is a partial subset of panel {panel_key} "
                        "({panel_name}). Missing tests: [{tests}]. Either omit "
                        "orderDetail to use the full panel definition, or "
