@@ -186,6 +186,8 @@ The Patient created from the bundle carries its medical record number:
 
     >>> patients[0].getMRN()
     'MRN-20394857'
+    >>> patients[0].getMaritalStatus()
+    u'M'
 
 The Patient telecom is mapped onto the patient record:
 
